@@ -1,81 +1,67 @@
 # conf
 
-conf provides an opinionated, struct-first way of reading configuration
+struct-driven opinionated configuration with flags
 
-## note
-This library is still in **alpha**. It needs docs, full coverage testing (well, tests at all), and poking to find edgecases.
+## Overview
+`conf` provides a simple method to drive structured configuration from types and fields, with automatic flag and usage generation.
 
-## usage
-
+## Usage
 ```go
 package main
 
 import (
-        "fmt"
-        "github.com/flowchartsman/conf"
-        "time"
+	"fmt"
+	"github.com/flowchartsman/conf"
+	"time"
 )
 
-type EmbeddedConf struct {
-        Baz int `conf:"help:the number of bazzes to baz"`
-}
-
-type ConfigTest struct {
-        EmbeddedConf
-        TimeToWait time.Duration `conf:"short:t,help:how long to wait"`
-        DNSServer  string        `conf:"default:127.0.0.1,help:the 'address' of the dns server to use"`
-        Thing      bool          `conf:"help:to thing or not to thing"`
+type myConfig struct {
+	TimeToWait time.Duration `conf:"short:t,help:how long to wait"`
+	DNSServer  string        `conf:"default:127.0.0.1,help:the 'address' of the dns server to use"`
+	Debug      bool          `conf:"help:enable debug mode"`
 }
 
 func main() {
-        var c ConfigTest
-        err := conf.Parse(&c,
-                conf.WithConfigFileFlag("conf"),
-                conf.WithConfigFile("/etc/foo.conf"),
-        )
-        if err != nil {
-                fmt.Println(err)
-        }
-        fmt.Printf("%#v\n", c)
+	var c myConfig
+	err := conf.Parse(&c)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Printf("%#v\n", c)
 }
 ```
 
 ```
-./conftest -?
+$ ./conftest -h
 Usage: ./conftest [options] [arguments]
 
 OPTIONS
-        --baz <int>
-                the number of bazzes to baz
-        --conf <filename>
-                the filename to load configuration from
-                (default: /etc/foo.conf)
+        --debug enable debug mode
         --dns-server <address>
                 the address of the dns server to use
                 (default: 127.0.0.1)
-        --thing to thing or not to thing
+        --help, -h      display this help message
         --time-to-wait, -t <duration>
                 how long to wait
 
-FILES
-        /etc/foo.conf
-                The system-wide configuration file (overridden by --conf)
-
 ENVIRONMENT
-        BAZ
-                the number of bazzes to baz
+        DEBUG <true|false>
+                enable debug mode
         DNS_SERVER
                 the address of the dns server to use
-        THING <true|false>
-                to thing or not to thing
         TIME_TO_WAIT
                 how long to wait
+
+$ ./conftest
+main.myConfig{TimeToWait:0, DNSServer:"127.0.0.1", Debug:false}
+$ export TIME_TO_WAIT=5s
+$ ./conftest --dns-server=192.168.1.1 -debug
+main.myConfig{TimeToWait:5000000000, DNSServer:"192.168.1.1", Debug:true}
 ```
 
-```
-$ BAZ=1 ./conftest -t 5s -thing
-main.ConfigTest{EmbeddedConf:main.EmbeddedConf{Baz:1}, TimeToWait:5000000000, DNSServer:"127.0.0.1", Thing:true}
-```
+## note
+This library is still in **alpha**. It needs docs, full coverage testing (well, tests at all), and poking to find edgecases.
+
 ## shoulders
 This library takes inspiration (and some code) from some great work by some great engineers. These are credited in the license, but more detail soon.
 - [kelseyhightower/envconfig](https://github.com/kelseyhightower/envconfig)
