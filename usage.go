@@ -8,6 +8,13 @@ import (
 )
 
 func printUsage(fields []field, c context) {
+	fields = append(fields, field{
+		flagName:  "help",
+		boolField: true,
+		options: fieldOptions{
+			short: 'h',
+			help:  "display this help message",
+		}})
 	if c.confFlag != "" {
 		confFlagField := field{
 			flagName: c.confFlag,
@@ -57,7 +64,7 @@ func printUsage(fields []field, c context) {
 	}
 	uprint("ENVIRONMENT\n")
 	for _, f := range fields {
-		if f.flagName == c.confFlag {
+		if f.flagName == c.confFlag || f.flagName == "help" {
 			continue
 		}
 		_, help := unquoteHelp(&f)
