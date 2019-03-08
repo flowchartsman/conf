@@ -104,17 +104,20 @@ func ParseWithArgs(confStruct interface{}, options ...Option) ([]string, error) 
 			}
 		}
 		if !found {
-			value = field.options.defaultStr
+			if field.options.required {
+				return nil, fmt.Errorf("required field %s is missing value", field.name)
+			} else {
+				value = field.options.defaultStr
+			}
 		}
-		if !found && value == "" && field.options.required {
-			return nil, fmt.Errorf("required field %s is missing value", field.name)
-		}
-		if err := processField(value, field.field); err != nil {
-			return nil, &processError{
-				fieldName: field.name,
-				typeName:  field.field.Type().String(),
-				value:     value,
-				err:       err,
+		if value != "" {
+			if err := processField(value, field.field); err != nil {
+				return nil, &processError{
+					fieldName: field.name,
+					typeName:  field.field.Type().String(),
+					value:     value,
+					err:       err,
+				}
 			}
 		}
 	}
