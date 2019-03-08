@@ -49,6 +49,9 @@ func printUsage(fields []field, c context) {
 				uprint("\n\t\t%s", help)
 			}
 		}
+		if f.options.required {
+			uprint(" (required)")
+		}
 		if f.options.defaultStr != "" {
 			uprint("\n\t\t(default: %s)", f.options.defaultStr)
 		}
