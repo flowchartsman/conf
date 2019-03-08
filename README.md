@@ -2,6 +2,11 @@
 
 conf provides an opinionated, struct-first way of reading configuration
 
+## note
+This library is still in **alpha**. It needs full coverage testing (well, tests at all) and poking to find edgecases.
+
+## usage
+
 ```go
 package main
 
@@ -71,3 +76,7 @@ ENVIRONMENT
 $ BAZ=1 ./conftest -t 5s -thing
 main.ConfigTest{EmbeddedConf:main.EmbeddedConf{Baz:1}, TimeToWait:5000000000, DNSServer:"127.0.0.1", Thing:true}
 ```
+## shoulders
+This library takes inspiration (and some code) from some great work by some great engineers. These are credited in the license, but more detail soon.
+- [kelseyhightower/envconfig](https://github.com/kelseyhightower/envconfig)
+- [peterbourgon/ff](https://github.com/peterbourgon/ff)
