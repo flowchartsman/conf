@@ -32,10 +32,6 @@ func newFlagSource(fields []field, exempt []string) (*flagSource, []string, erro
 		if field.options.short != 0 {
 			shorts[string(field.options.short)] = field.flagName
 		}
-		// pre-fill all boolean flags as false
-		if field.boolField {
-			found[field.flagName] = "false"
-		}
 	}
 
 	args := make([]string, len(os.Args)-1)
