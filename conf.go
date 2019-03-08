@@ -4,15 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 )
 
 var (
 	// ErrInvalidStruct indicates that a configuration struct is not the correct type.
 	ErrInvalidStruct = errors.New("configuration must be a struct pointer")
-	// ErrInvalidTagValue indicates that the value of the "conf" tag is
-	// syntactically invalid
-	ErrInvalidTagValue = errors.New("invalid value for tag \"conf\"")
 )
 
 type context struct {
@@ -123,43 +119,6 @@ func ParseWithArgs(confStruct interface{}, options ...Option) ([]string, error) 
 	}
 
 	return args, nil
-}
-
-func parseTag(tagStr string) (fieldOptions, error) {
-	f := fieldOptions{}
-	if tagStr == "" {
-		return f, nil
-	}
-	tagParts := strings.Split(tagStr, ",")
-	for _, tagPart := range tagParts {
-		vals := strings.SplitN(tagPart, ":", 2)
-		switch len(vals) {
-		case 1:
-			tagProp := vals[0]
-			switch tagProp {
-			case "noprint":
-				f.noprint = true
-			case "required":
-				f.required = true
-			}
-		case 2:
-			tagProp, tagPropVal := vals[0], strings.TrimSpace(vals[1])
-			switch tagProp {
-			case "short":
-				if len([]rune(tagPropVal)) != 1 {
-					return f, fmt.Errorf("short value must be a single rune, got %q", tagPropVal)
-				}
-				f.short = []rune(tagPropVal)[0]
-			case "default":
-				f.defaultStr = tagPropVal
-			case "help":
-				f.help = tagPropVal
-			}
-		default:
-			return f, ErrInvalidTagValue //TODO: make descriptive
-		}
-	}
-	return f, nil
 }
 
 // A processError occurs when an environment variable cannot be converted to

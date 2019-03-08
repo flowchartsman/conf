@@ -1,7 +1,9 @@
 package conf
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 )
 
 // field maintains information about a field in the configuration struct
@@ -57,9 +59,14 @@ func extractFields(prefix []string, target interface{}, c context) ([]field, err
 			continue
 		}
 
+		fieldName := structField.Name
+		// break name into constituent pieces via CamelCase parser
+		fieldKey := append(prefix, camelSplit(fieldName)...)
+
+		// get and options
 		fieldOpts, err := parseTag(fieldTags)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("conf: error parsing tags for field %s: %s", fieldName, err)
 		}
 
 		// found a pointer
@@ -74,10 +81,6 @@ func extractFields(prefix []string, target interface{}, c context) ([]field, err
 			}
 			f = f.Elem()
 		}
-
-		fieldName := structField.Name
-		// break name into constituent pieces via CamelCase parser
-		fieldKey := append(prefix, camelSplit(fieldName)...)
 
 		// if we've found a struct, drill down, appending fields as we go
 		if f.Kind() == reflect.Struct {
@@ -110,4 +113,47 @@ func extractFields(prefix []string, target interface{}, c context) ([]field, err
 		}
 	}
 	return fields, nil
+}
+
+func parseTag(tagStr string) (fieldOptions, error) {
+	f := fieldOptions{}
+	if tagStr == "" {
+		return f, nil
+	}
+	tagParts := strings.Split(tagStr, ",")
+	for _, tagPart := range tagParts {
+		vals := strings.SplitN(tagPart, ":", 2)
+		switch len(vals) {
+		case 1:
+			tagProp := vals[0]
+			switch tagProp {
+			case "noprint":
+				f.noprint = true
+			case "required":
+				f.required = true
+			}
+		case 2:
+			tagProp, tagPropVal := vals[0], strings.TrimSpace(vals[1])
+			switch tagProp {
+			case "short":
+				if len([]rune(tagPropVal)) != 1 {
+					return f, fmt.Errorf("short value must be a single rune, got %q", tagPropVal)
+				}
+				f.short = []rune(tagPropVal)[0]
+			case "default":
+				f.defaultStr = tagPropVal
+			case "help":
+				f.help = tagPropVal
+			}
+		default:
+			return f, fmt.Errorf("invalid tag value: %s", tagPart)
+		}
+	}
+
+	// sanity check
+	switch {
+	case f.required && f.defaultStr != "":
+		return f, fmt.Errorf("conf: cannot set both `required` and `default` for field")
+	}
+	return f, nil
 }
