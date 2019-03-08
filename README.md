@@ -3,7 +3,7 @@
 conf provides an opinionated, struct-first way of reading configuration
 
 ## note
-This library is still in **alpha**. It needs full coverage testing (well, tests at all) and poking to find edgecases.
+This library is still in **alpha**. It needs docs, full coverage testing (well, tests at all), and poking to find edgecases.
 
 ## usage
 
