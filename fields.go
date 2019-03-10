@@ -148,15 +148,13 @@ func parseTag(tagStr string) (fieldOptions, error) {
 			case "help":
 				f.help = tagPropVal
 			}
-		default:
-			return f, fmt.Errorf("invalid tag value: %s", tagPart)
 		}
 	}
 
 	// sanity check
 	switch {
 	case f.required && f.defaultStr != "":
-		return f, fmt.Errorf("conf: cannot set both `required` and `default` for field")
+		return f, fmt.Errorf("cannot set both `required` and `default`")
 	}
 	return f, nil
 }
