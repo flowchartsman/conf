@@ -123,9 +123,9 @@ func parseTag(tagStr string) (fieldOptions, error) {
 	tagParts := strings.Split(tagStr, ",")
 	for _, tagPart := range tagParts {
 		vals := strings.SplitN(tagPart, ":", 2)
+		tagProp := vals[0]
 		switch len(vals) {
 		case 1:
-			tagProp := vals[0]
 			switch tagProp {
 			case "noprint":
 				f.noprint = true
@@ -133,7 +133,10 @@ func parseTag(tagStr string) (fieldOptions, error) {
 				f.required = true
 			}
 		case 2:
-			tagProp, tagPropVal := vals[0], strings.TrimSpace(vals[1])
+			tagPropVal := strings.TrimSpace(vals[1])
+			if tagPropVal == "" {
+				return f, fmt.Errorf("tag %q missing a value", tagProp)
+			}
 			switch tagProp {
 			case "short":
 				if len([]rune(tagPropVal)) != 1 {
