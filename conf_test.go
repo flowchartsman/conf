@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -22,6 +23,84 @@ func TestSimpleParseFlags(t *testing.T) {
 	assert(t, err == nil)
 	assert(t, c.TestInt == 1)
 	assert(t, c.TestString == "s")
+	assert(t, c.TestBool)
+}
+
+func TestSimpleParseEnv(t *testing.T) {
+	prepArgs()
+	prepEnv(
+		"TEST_INT", "1",
+		"TEST_STRING", "s",
+		"TEST_BOOL", "TRUE",
+	)
+	var c simpleConf
+	err := Parse(&c)
+	assert(t, err == nil)
+	assert(t, c.TestInt == 1)
+	assert(t, c.TestString == "s")
+	assert(t, c.TestBool)
+}
+
+func TestSimpleFile(t *testing.T) {
+	prepArgs()
+	prepEnv()
+	testFile, err := ioutil.TempFile("", "conf-test")
+	if err != nil {
+		panic("error creating temp file for test: " + err.Error())
+	}
+	defer os.Remove(testFile.Name())
+	testFile.Write([]byte(`TEST_INT 1
+TEST_STRING s
+TEST_BOOL TRUE
+`))
+	err = testFile.Close()
+	if err != nil {
+		panic("error closing temp file for test: " + err.Error())
+	}
+	var c simpleConf
+	err = Parse(&c,
+		WithConfigFile(testFile.Name()),
+	)
+	assert(t, err == nil)
+	assert(t, c.TestInt == 1)
+	assert(t, c.TestString == "s")
+	assert(t, c.TestBool)
+}
+
+func TestSimpleSourcePriority(t *testing.T) {
+	type simpleConfPriority struct {
+		TestInt      int
+		TestIntTwo   int
+		TestIntThree int
+	}
+	prepEnv(
+		"TEST_INT", "1",
+		"TEST_INT_TWO", "1",
+		"TEST_INT_THREE", "1",
+	)
+	testFile, err := ioutil.TempFile("", "conf-test")
+	if err != nil {
+		panic("error creating temp file for test: " + err.Error())
+	}
+	defer os.Remove(testFile.Name())
+	testFile.Write([]byte(`TEST_INT_TWO 2
+TEST_INT_THREE 2
+	`))
+	err = testFile.Close()
+	if err != nil {
+		panic("error closing temp file for test: " + err.Error())
+	}
+	prepArgs(
+		"--test-int-three", "3",
+	)
+	var c simpleConfPriority
+	err = Parse(&c,
+		WithConfigFile(testFile.Name()),
+	)
+	assert(t, err == nil)
+	assert(t, c.TestInt == 1)
+	assert(t, c.TestIntTwo == 2)
+	assert(t, c.TestIntThree == 3)
 }
 
 func TestParseNonRefIsError(t *testing.T) {
