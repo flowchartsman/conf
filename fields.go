@@ -30,7 +30,7 @@ type fieldOptions struct {
 }
 
 // extractFields uses reflection to examine the struct and generate the keys
-func extractFields(prefix []string, target interface{}, c context) ([]field, error) {
+func extractFields(prefix []string, target interface{}) ([]field, error) {
 	if prefix == nil {
 		prefix = []string{}
 	}
@@ -93,7 +93,7 @@ func extractFields(prefix []string, target interface{}, c context) ([]field, err
 				}
 
 				embeddedPtr := f.Addr().Interface()
-				innerFields, err := extractFields(innerPrefix, embeddedPtr, c)
+				innerFields, err := extractFields(innerPrefix, embeddedPtr)
 				if err != nil {
 					return nil, err
 				}

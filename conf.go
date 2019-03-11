@@ -31,7 +31,7 @@ func ParseWithArgs(confStruct interface{}, options ...Option) ([]string, error) 
 		option(&c)
 	}
 
-	fields, err := extractFields(nil, confStruct, c)
+	fields, err := extractFields(nil, confStruct)
 	if err != nil {
 		return nil, err
 	}
@@ -102,9 +102,8 @@ func ParseWithArgs(confStruct interface{}, options ...Option) ([]string, error) 
 		if !found {
 			if field.options.required {
 				return nil, fmt.Errorf("required field %s is missing value", field.name)
-			} else {
-				value = field.options.defaultStr
 			}
+			value = field.options.defaultStr
 		}
 		if value != "" {
 			if err := processField(value, field.field); err != nil {
