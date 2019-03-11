@@ -1,6 +1,6 @@
 # conf
 
-struct-driven opinionated configuration with flags
+Simple, self-documenting, struct-driven configuration with flag generation.
 
 ## Overview
 `conf` provides a simple method to drive structured configuration from types and fields, with automatic flag and usage generation.
