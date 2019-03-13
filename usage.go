@@ -53,11 +53,11 @@ func printUsage(fields []field, c context) {
 		} else {
 			fmt.Fprintf(w, " %s\t  %s\t\n", typeName, f.envName)
 			if help != "" {
-				fmt.Fprintf(w, "    %s\t\t\n", help)
+				fmt.Fprintf(w, "      %s\t\t\n", help)
 			}
 			optString := getOptString(f)
 			if optString != "" {
-				fmt.Fprintf(w, "    %s\t\n", getOptString(f))
+				fmt.Fprintf(w, "      %s\t\n", getOptString(f))
 			}
 		}
 	}
