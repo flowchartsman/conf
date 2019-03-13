@@ -107,15 +107,27 @@ func unquoteHelp(f *field) (name string, usage string) {
 		}
 	}
 
-	if name == "" {
-		// No explicit name, so use type if we can find one.
-		name = "value"
+	if !f.field.IsValid() {
+		return
+	}
+	t := f.field.Type()
+	var isSlice bool
+	// if it's a pointer, we want to deref
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	// if it's a slice, we want the type of the slice elements
+	if t.Kind() == reflect.Slice {
+		t = t.Elem()
+		isSlice = true
+	}
 
-		switch f.field.Kind() {
+	// If no explicit name was provided, attempt to get the type
+	if name == "" {
+		switch t.Kind() {
 		case reflect.Bool:
+			// TODO: Slice of bool even useful? What do?
 			name = ""
-		//TODO: duration
-		//TODO: slice
 		case reflect.Float32, reflect.Float64:
 			name = "float"
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -129,10 +141,15 @@ func unquoteHelp(f *field) (name string, usage string) {
 			name = "string"
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			name = "uint"
+		default:
+			name = "value"
 		}
 	}
-	if name != "" {
-		name = `<` + name + `>`
+
+	if isSlice {
+		name = fmt.Sprintf("<%s>,[%s...]", name, name)
+	} else {
+		name = fmt.Sprintf("<%s>", name)
 	}
 	return
 }

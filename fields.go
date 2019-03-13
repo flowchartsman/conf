@@ -69,14 +69,14 @@ func extractFields(prefix []string, target interface{}) ([]field, error) {
 			return nil, fmt.Errorf("conf: error parsing tags for field %s: %s", fieldName, err)
 		}
 
-		// found a pointer
+		// Drill down through pointers until we bottom out at type or nil
 		for f.Kind() == reflect.Ptr {
 			if f.IsNil() {
-				// if it's not a struct, we don't care
+				// not a struct, leave it alone
 				if f.Type().Elem().Kind() != reflect.Struct {
 					break
 				}
-				// if it is, create a zero instance
+				// It is a struct, zero it out
 				f.Set(reflect.New(f.Type().Elem()))
 			}
 			f = f.Elem()
