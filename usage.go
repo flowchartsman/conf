@@ -5,6 +5,8 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
+	"text/tabwriter"
 )
 
 func printUsage(fields []field, c context) {
@@ -31,69 +33,57 @@ func printUsage(fields []field, c context) {
 		return fields[i].flagName < fields[j].flagName
 	})
 
-	uprint("Usage: %s [options] [arguments]\n\nOPTIONS\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "Usage: %s [options] [arguments]\n\n", os.Args[0])
+
+	fmt.Fprintln(os.Stderr, "OPTIONS")
+	w := new(tabwriter.Writer)
+	w.Init(os.Stderr, 0, 4, 2, ' ', tabwriter.TabIndent)
+
 	for _, f := range fields {
-		name, help := unquoteHelp(&f)
-		uprint("\t")
-		uprint("--%s", f.flagName)
+		typeName, help := getTypeAndHelp(&f)
+		fmt.Fprintf(w, "  --%s", f.flagName)
 		if f.options.short != 0 {
-			uprint(", -%s", string(f.options.short))
+			fmt.Fprintf(w, ", -%s", string(f.options.short))
 		}
 		if f.boolField {
 			if help != "" {
-				uprint("\t%s", help)
+				fmt.Fprintf(w, " %s", help)
 			}
+			fmt.Fprintf(w, " %s\t  %s\t\n", getOptString(f), f.envName)
 		} else {
-			uprint(" %s", name)
+			fmt.Fprintf(w, " %s\t  %s\t\n", typeName, f.envName)
 			if help != "" {
-				uprint("\n\t\t%s", help)
+				fmt.Fprintf(w, "    %s\t\t\n", help)
+			}
+			optString := getOptString(f)
+			if optString != "" {
+				fmt.Fprintf(w, "    %s\t\n", getOptString(f))
 			}
 		}
-		if f.options.required {
-			uprint(" (required)")
-		}
-		if f.options.defaultStr != "" {
-			uprint("\n\t\t(default: %s)", f.options.defaultStr)
-		}
-		uprint("\n")
 	}
-	uprint("\n")
+	w.Flush()
+	fmt.Fprintf(os.Stderr, "\n")
 	if c.confFile != "" {
-		uprint("FILES\n\t%s\n\t\t%s", c.confFile, "The system-wide configuration file")
+		fmt.Fprintf(os.Stderr, "FILES\n  %s\n    %s", c.confFile, "The system-wide configuration file")
 		if c.confFlag != "" {
-			uprint(` (overridden by --%s)`, c.confFlag)
+			fmt.Fprintf(os.Stderr, ` (overridden by --%s)`, c.confFlag)
 		}
-		uprint("\n\n")
-	}
-	uprint("ENVIRONMENT\n")
-	for _, f := range fields {
-		if f.flagName == c.confFlag || f.flagName == "help" {
-			continue
-		}
-		_, help := unquoteHelp(&f)
-		uprint("\t%s", f.envName)
-		if f.boolField {
-			uprint(" <true|false>")
-		}
-		if help != "" {
-			uprint("\n\t\t%s", help)
-		}
-		uprint("\n")
+		fmt.Fprint(os.Stderr, "\n\n")
 	}
 }
 
-func uprint(s string, vals ...interface{}) {
-	fmt.Fprintf(os.Stderr, s, vals...)
-}
-
-// unquoteUsage extracts a back-quoted name from the usage
-// string for a flag and returns it and the un-quoted usage.
-// Given "a `name` to show" it returns ("name", "a name to show").
-// If there are no back quotes, the name is an educated guess of the
-// type of the flag's value, or the empty string if the flag is boolean.
+// getTypeAndHelp extracts the type and help message for a single field for
+// printing in the usage message. If the help message contains text in
+// single quotes ('), this is assumed to be a more specific "type", and will
+// be returned as such. If there are no back quotes, it attempts to make a
+// guess as to the type of the field. Boolean flags are not printed with a
+// type, manually-specified or not, since their presence is equated with a
+// 'true' value and their absence with a 'false' value. If a type cannot be
+// determined, it will simply give the name "value". Slices will be annotated
+// as "<Type>,[Type...]", where "Type" is whatever type name was chosen.
 // (adapted from package flag)
-func unquoteHelp(f *field) (name string, usage string) {
-	// Look for a single-quoted name, but avoid the strings package.
+func getTypeAndHelp(f *field) (name string, usage string) {
+	// Look for a single-quoted name
 	usage = f.options.help
 	for i := 0; i < len(usage); i++ {
 		if usage[i] == '\'' {
@@ -126,7 +116,9 @@ func unquoteHelp(f *field) (name string, usage string) {
 	if name == "" {
 		switch t.Kind() {
 		case reflect.Bool:
-			// TODO: Slice of bool even useful? What do?
+			if !isSlice {
+				return "", usage
+			}
 			name = ""
 		case reflect.Float32, reflect.Float64:
 			name = "float"
@@ -152,4 +144,21 @@ func unquoteHelp(f *field) (name string, usage string) {
 		name = fmt.Sprintf("<%s>", name)
 	}
 	return
+}
+
+func getOptString(f field) string {
+	opts := make([]string, 0, 3)
+	if f.options.required {
+		opts = append(opts, "required")
+	}
+	if f.options.noprint {
+		opts = append(opts, "noprint")
+	}
+	if f.options.defaultStr != "" {
+		opts = append(opts, fmt.Sprintf("default: %s", f.options.defaultStr))
+	}
+	if len(opts) > 0 {
+		return fmt.Sprintf("(%s)", strings.Join(opts, `,`))
+	}
+	return ""
 }
