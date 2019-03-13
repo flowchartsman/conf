@@ -93,7 +93,7 @@ func uprint(s string, vals ...interface{}) {
 // type of the flag's value, or the empty string if the flag is boolean.
 // (adapted from package flag)
 func unquoteHelp(f *field) (name string, usage string) {
-	// Look for a back-quoted name, but avoid the strings package.
+	// Look for a single-quoted name, but avoid the strings package.
 	usage = f.options.help
 	for i := 0; i < len(usage); i++ {
 		if usage[i] == '\'' {
