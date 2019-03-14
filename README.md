@@ -77,7 +77,7 @@ SUB_VALUE=1 TIME_TO_WAIT=5s DNS_SERVER=1.1.1.1 DEBUG=false DB_SERVERS=[127.0.0.1
 ```
 
 ## note
-This library is still in **alpha**. It needs docs, full coverage testing (well, tests at all), and poking to find edgecases.
+This library is still in **alpha**. It needs docs, full coverage testing, and poking to find edgecases.
 
 ## shoulders
 This library takes inspiration (and some code) from some great work by some great engineers. These are credited in the license, but more detail soon.
