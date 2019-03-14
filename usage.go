@@ -10,13 +10,13 @@ import (
 )
 
 func printUsage(fields []field, c context) {
-	fields = append(fields, field{
-		flagName:  "help",
-		boolField: true,
-		options: fieldOptions{
-			short: 'h',
-			help:  "display this help message",
-		}})
+
+	// sort the fields, by their long name
+	sort.SliceStable(fields, func(i, j int) bool {
+		return fields[i].flagName < fields[j].flagName
+	})
+
+	// put conf and help last
 	if c.confFlag != "" {
 		confFlagField := field{
 			flagName: c.confFlag,
@@ -27,11 +27,13 @@ func printUsage(fields []field, c context) {
 		}
 		fields = append(fields, confFlagField)
 	}
-
-	// sort the fields, by their long name
-	sort.SliceStable(fields, func(i, j int) bool {
-		return fields[i].flagName < fields[j].flagName
-	})
+	fields = append(fields, field{
+		flagName:  "help",
+		boolField: true,
+		options: fieldOptions{
+			short: 'h',
+			help:  "display this help message",
+		}})
 
 	fmt.Fprintf(os.Stderr, "Usage: %s [options] [arguments]\n\n", os.Args[0])
 
