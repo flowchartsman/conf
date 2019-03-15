@@ -45,22 +45,14 @@ func printUsage(fields []field, c context) {
 		typeName, help := getTypeAndHelp(&f)
 		fmt.Fprintf(w, "  --%s", f.flagName)
 		if f.options.short != 0 {
-			fmt.Fprintf(w, ", -%s", string(f.options.short))
+			fmt.Fprintf(w, "/-%s", string(f.options.short))
 		}
-		if f.boolField {
-			if help != "" {
-				fmt.Fprintf(w, " %s", help)
-			}
-			fmt.Fprintf(w, " %s\t  %s\t\n", getOptString(f), f.envName)
-		} else {
-			fmt.Fprintf(w, " %s\t  %s\t\n", typeName, f.envName)
-			if help != "" {
-				fmt.Fprintf(w, "      %s\t\t\n", help)
-			}
-			optString := getOptString(f)
-			if optString != "" {
-				fmt.Fprintf(w, "      %s\t\n", getOptString(f))
-			}
+		if f.envName != "" {
+			fmt.Fprintf(w, "/$%s", f.envName)
+		}
+		fmt.Fprintf(w, " %s\t%s\t\n", typeName, getOptString(f))
+		if help != "" {
+			fmt.Fprintf(w, "      %s\t\t\n", help)
 		}
 	}
 	w.Flush()
@@ -99,51 +91,51 @@ func getTypeAndHelp(f *field) (name string, usage string) {
 		}
 	}
 
-	if !f.field.IsValid() {
-		return
-	}
-	t := f.field.Type()
 	var isSlice bool
-	// if it's a pointer, we want to deref
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	// if it's a slice, we want the type of the slice elements
-	if t.Kind() == reflect.Slice {
-		t = t.Elem()
-		isSlice = true
-	}
+	if f.field.IsValid() {
+		t := f.field.Type()
+		// if it's a pointer, we want to deref
+		if t.Kind() == reflect.Ptr {
+			t = t.Elem()
+		}
+		// if it's a slice, we want the type of the slice elements
+		if t.Kind() == reflect.Slice {
+			t = t.Elem()
+			isSlice = true
+		}
 
-	// If no explicit name was provided, attempt to get the type
-	if name == "" {
-		switch t.Kind() {
-		case reflect.Bool:
-			if !isSlice {
-				return "", usage
+		// If no explicit name was provided, attempt to get the type
+		if name == "" {
+			switch t.Kind() {
+			case reflect.Bool:
+				if !isSlice {
+					return "", usage
+				}
+				name = ""
+			case reflect.Float32, reflect.Float64:
+				name = "float"
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				typ := f.field.Type()
+				if typ.PkgPath() == "time" && typ.Name() == "Duration" {
+					name = "duration"
+				} else {
+					name = "int"
+				}
+			case reflect.String:
+				name = "string"
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				name = "uint"
+			default:
+				name = "value"
 			}
-			name = ""
-		case reflect.Float32, reflect.Float64:
-			name = "float"
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			typ := f.field.Type()
-			if typ.PkgPath() == "time" && typ.Name() == "Duration" {
-				name = "duration"
-			} else {
-				name = "int"
-			}
-		case reflect.String:
-			name = "string"
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			name = "uint"
-		default:
-			name = "value"
 		}
 	}
-
-	if isSlice {
+	switch {
+	case isSlice:
 		name = fmt.Sprintf("<%s>,[%s...]", name, name)
-	} else {
+	case name != "":
 		name = fmt.Sprintf("<%s>", name)
+	default:
 	}
 	return
 }
