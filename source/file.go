@@ -1,4 +1,4 @@
-package conf
+package source
 
 import (
 	"bufio"
@@ -6,16 +6,18 @@ import (
 	"strings"
 )
 
-// fileSource is a source for config files in an extremely simple format. Each
+// File is a source for config files in an extremely simple format. Each
 // line is tokenized as a single key/value pair. The first whitespace-delimited
 // token in the line is interpreted as the flag name, and all remaining tokens
 // are interpreted as the value. Any leading hyphens on the flag name are
 // ignored.
-type fileSource struct {
+type File struct {
 	m map[string]string
 }
 
-func newFileSource(filename string) (*fileSource, error) {
+// NewFile accepts a filename and parses the contents into a File for
+// use by the configuration package.
+func NewFile(filename string) (*File, error) {
 	m := make(map[string]string)
 
 	file, err := os.Open(filename)
@@ -53,13 +55,13 @@ func newFileSource(filename string) (*fileSource, error) {
 		m[name] = value
 	}
 
-	return &fileSource{m: m}, nil
+	return &File{m: m}, nil
 }
 
-// Get returns the stringfied value stored at the specified key in the plain
-// config file.
-func (p *fileSource) Get(key []string) (string, bool) {
-	k := getEnvName(key)
-	value, ok := p.m[k]
+// Get implements the confg.Source interface. It returns the stringfied value
+// stored at the specified key in the plain config file.
+func (f *File) Get(key []string) (string, bool) {
+	k := strings.ToUpper(strings.Join(key, `_`))
+	value, ok := f.m[k]
 	return value, ok
 }

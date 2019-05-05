@@ -9,24 +9,12 @@ import (
 	"text/tabwriter"
 )
 
-func printUsage(fields []field, c context) {
+func printUsage(fields []field) {
 
-	// sort the fields, by their long name.
+	// Sort the fields by their long name.
 	sort.SliceStable(fields, func(i, j int) bool {
 		return fields[i].flagName < fields[j].flagName
 	})
-
-	// Put confif and help last.
-	if c.confFlag != "" {
-		confFlagField := field{
-			flagName: c.confFlag,
-		}
-		if c.confFile != "" {
-			confFlagField.options.defaultStr = c.confFile
-			confFlagField.options.help = "the 'filename' to load configuration from"
-		}
-		fields = append(fields, confFlagField)
-	}
 
 	fields = append(fields, field{
 		flagName:  "help",
@@ -59,13 +47,6 @@ func printUsage(fields []field, c context) {
 
 	w.Flush()
 	fmt.Fprintf(os.Stderr, "\n")
-	if c.confFile != "" {
-		fmt.Fprintf(os.Stderr, "FILES\n  %s\n    %s", c.confFile, "The system-wide configuration file")
-		if c.confFlag != "" {
-			fmt.Fprintf(os.Stderr, ` (overridden by --%s)`, c.confFlag)
-		}
-		fmt.Fprint(os.Stderr, "\n\n")
-	}
 }
 
 // getTypeAndHelp extracts the type and help message for a single field for

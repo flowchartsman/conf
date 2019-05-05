@@ -1,49 +1,26 @@
-package conf
+package source
 
 import (
 	"errors"
 	"fmt"
-	"os"
+	"strings"
 )
 
-var errHelpWanted = errors.New("help wanted")
+// ErrHelpWanted provides an indication help was requested.
+var ErrHelpWanted = errors.New("help wanted")
 
-type flagSource struct {
-	found map[string]string
+// Flag is a source for command line arguments.
+type Flag struct {
+	m map[string]string
 }
 
-// TODO: make missing flags optionally throw error?
-func newFlagSource(fields []field, exempt []string) (*flagSource, []string, error) {
-
-	// TODO: If this is small, it could help keep it on the stack if these variables
-	// are not leaking. But we are talking about such a small data set.
-	// Let's discuss for readability.
-	found := make(map[string]string, len(fields))
-	expected := make(map[string]*field, len(fields))
-	shorts := make(map[string]string, len(fields))
-	exemptFlags := make(map[string]struct{}, len(exempt))
-
-	// Some flags are special, like for specifying a config file flag, which
-	// we definitely want to inspect, but don't represent field data.
-	for _, exemptFlag := range exempt {
-		if exemptFlag != "" {
-			exemptFlags[exemptFlag] = struct{}{}
-		}
-	}
-
-	for i, field := range fields {
-		expected[field.flagName] = &fields[i]
-		if field.options.short != 0 {
-			shorts[string(field.options.short)] = field.flagName
-		}
-	}
-
-	args := make([]string, len(os.Args)-1)
-	copy(args, os.Args[1:])
+// NewFlag parsing a string of command line arguments. NewFlag will return
+// ErrHelpWanted, if the help flag is identifyed. This code is adapted
+// from the Go standard library flag package.
+func NewFlag(args []string) (*Flag, error) {
+	m := make(map[string]string)
 
 	if len(args) != 0 {
-
-		// Adapted from the 'flag' package.
 		for {
 			if len(args) == 0 {
 				break
@@ -66,9 +43,10 @@ func newFlagSource(fields []field, exempt []string) (*flagSource, []string, erro
 					break
 				}
 			}
+
 			name := s[numMinuses:]
 			if len(name) == 0 || name[0] == '-' || name[0] == '=' {
-				return nil, nil, fmt.Errorf("bad flag syntax: %s", s)
+				return nil, fmt.Errorf("bad flag syntax: %s", s)
 			}
 
 			// It's a flag. Does it have an argument?
@@ -85,17 +63,7 @@ func newFlagSource(fields []field, exempt []string) (*flagSource, []string, erro
 			}
 
 			if name == "help" || name == "h" || name == "?" {
-				return nil, nil, errHelpWanted
-			}
-
-			if long, ok := shorts[name]; ok {
-				name = long
-			}
-
-			if expected[name] == nil {
-				if _, ok := exemptFlags[name]; !ok {
-					return nil, nil, fmt.Errorf("flag provided but not defined: -%s", name)
-				}
+				return nil, ErrHelpWanted
 			}
 
 			// If we don't have a value yet, it's possible the flag was not in the
@@ -108,29 +76,24 @@ func newFlagSource(fields []field, exempt []string) (*flagSource, []string, erro
 					value, args = args[0], args[1:]
 				} else {
 
-					// we wanted a value but found the end or another flag. The
-					// only time this is okay is if this is a boolean flag, in
-					// which case `-flag` is okay, because it is assumed to be
-					// the same as `-flag true`.
-					if expected[name].boolField {
-						value = "true"
-					} else {
-						return nil, nil, fmt.Errorf("flag needs an argument: -%s", name)
-					}
+					// We assume this is a boolean flag.
+					value = "true"
 				}
 			}
-			found[name] = value
+
+			// Store the flag/value pair.
+			m[name] = value
 		}
 	}
 
-	return &flagSource{found: found}, args, nil
+	return &Flag{m: m}, nil
 }
 
-// Get returns the stringfied value stored at the specified key
-// from the flag source.
-func (f *flagSource) Get(key []string) (string, bool) {
-	flagStr := getFlagName(key)
-	val, found := f.found[flagStr]
+// Get implements the confg.Source interface. Returns the stringfied value
+// stored at the specified key from the flag source.
+func (f *Flag) Get(key []string) (string, bool) {
+	k := strings.ToLower(strings.Join(key, `-`))
+	val, found := f.m[k]
 	return val, found
 }
 
