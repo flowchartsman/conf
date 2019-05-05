@@ -1,6 +1,6 @@
 package conf
 
-// Option represents a change to the default parsing
+// Option represents a change to the default parsing.
 type Option func(c *context)
 
 // WithConfigFile tells parse to attempt to read from the specified file, if it
@@ -22,7 +22,7 @@ func WithConfigFileFlag(flagname string) Option {
 	}
 }
 
-// WithSource adds additional configuration sources for configuration parsing
+// WithSource adds additional configuration sources for configuration parsing.
 func WithSource(source Source) Option {
 	return func(c *context) {
 		c.sources = append(c.sources, source)

@@ -6,7 +6,7 @@ import (
 )
 
 // String returns a stringified version of the provided conf-tagged
-// struct, minus any fields tagged with `noprint`
+// struct, minus any fields tagged with `noprint`.
 func String(v interface{}) (string, error) {
 	fields, err := extractFields(nil, v)
 	if err != nil {

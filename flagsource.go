@@ -6,21 +6,25 @@ import (
 	"os"
 )
 
+var errHelpWanted = errors.New("help wanted")
+
 type flagSource struct {
 	found map[string]string
 }
 
-var errHelpWanted = errors.New("help wanted")
-
-// TODO?: make missing flags optionally throw error
+// TODO: make missing flags optionally throw error?
 func newFlagSource(fields []field, exempt []string) (*flagSource, []string, error) {
+
+	// TODO: If this is small, it could help keep it on the stack if these variables
+	// are not leaking. But we are talking about such a small data set.
+	// Let's discuss for readability.
 	found := make(map[string]string, len(fields))
 	expected := make(map[string]*field, len(fields))
 	shorts := make(map[string]string, len(fields))
 	exemptFlags := make(map[string]struct{}, len(exempt))
 
-	// some flags are special, like for specifying a config file flag, which
-	// we definitely want to inspect, but don't represent field data
+	// Some flags are special, like for specifying a config file flag, which
+	// we definitely want to inspect, but don't represent field data.
 	for _, exemptFlag := range exempt {
 		if exemptFlag != "" {
 			exemptFlags[exemptFlag] = struct{}{}
@@ -38,17 +42,22 @@ func newFlagSource(fields []field, exempt []string) (*flagSource, []string, erro
 	copy(args, os.Args[1:])
 
 	if len(args) != 0 {
-		//adapted from 'flag' package
+
+		// Adapted from the 'flag' package.
 		for {
 			if len(args) == 0 {
 				break
 			}
-			// look at the next arg
+
+			// Look at the next arg.
 			s := args[0]
-			// if it's too short or doesn't begin with a `-`, assume we're at the end of the flags
+
+			// If it's too short or doesn't begin with a `-`, assume we're at
+			// the end of the flags.
 			if len(s) < 2 || s[0] != '-' {
 				break
 			}
+
 			numMinuses := 1
 			if s[1] == '-' {
 				numMinuses++
@@ -62,7 +71,7 @@ func newFlagSource(fields []field, exempt []string) (*flagSource, []string, erro
 				return nil, nil, fmt.Errorf("bad flag syntax: %s", s)
 			}
 
-			// it's a flag. does it have an argument?
+			// It's a flag. Does it have an argument?
 			args = args[1:]
 			hasValue := false
 			value := ""
@@ -74,6 +83,7 @@ func newFlagSource(fields []field, exempt []string) (*flagSource, []string, erro
 					break
 				}
 			}
+
 			if name == "help" || name == "h" || name == "?" {
 				return nil, nil, errHelpWanted
 			}
@@ -88,17 +98,20 @@ func newFlagSource(fields []field, exempt []string) (*flagSource, []string, erro
 				}
 			}
 
-			// if we don't have a value yet, it's possible the flag was not in the
+			// If we don't have a value yet, it's possible the flag was not in the
 			// -flag=value format which means it might still have a value which would be
-			// the next argument, provided the next argument isn't a flag
+			// the next argument, provided the next argument isn't a flag.
 			if !hasValue {
 				if len(args) > 0 && args[0][0] != '-' {
-					// doesn't look like a flag. Must be a value
+
+					// Doesn't look like a flag. Must be a value.
 					value, args = args[0], args[1:]
 				} else {
-					// we wanted a value but found the end or another flag. The only time this is okay
-					// is if this is a boolean flag, in which case `-flag` is okay, because it is assumed
-					// to be the same as `-flag true`
+
+					// we wanted a value but found the end or another flag. The
+					// only time this is okay is if this is a boolean flag, in
+					// which case `-flag` is okay, because it is assumed to be
+					// the same as `-flag true`.
 					if expected[name].boolField {
 						value = "true"
 					} else {
@@ -110,11 +123,11 @@ func newFlagSource(fields []field, exempt []string) (*flagSource, []string, erro
 		}
 	}
 
-	return &flagSource{
-		found: found,
-	}, args, nil
+	return &flagSource{found: found}, args, nil
 }
 
+// Get returns the stringfied value stored at the specified key
+// from the flag source.
 func (f *flagSource) Get(key []string) (string, bool) {
 	flagStr := getFlagName(key)
 	val, found := f.found[flagStr]

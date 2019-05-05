@@ -13,7 +13,7 @@ func getFlagName(key []string) string {
 	return strings.ToLower(strings.Join(key, `-`))
 }
 
-// split string based on camel case
+// Split a string based on camel case.
 func camelSplit(src string) []string {
 	if src == "" {
 		return []string{}
@@ -28,20 +28,23 @@ func camelSplit(src string) []string {
 	lastIdx := 0
 	out := []string{}
 
-	// split into fields based on class of unicode character
+	// Split into fields based on class of unicode character.
 	for i, r := range runes {
 		class := charClass(r)
-		// if the class has transitioned
+
+		// If the class has transitioned.
 		if class != lastClass {
-			// if going from uppercase to lowercase, we want to retain the last
+
+			// If going from uppercase to lowercase, we want to retain the last
 			// uppercase letter for names like FOOBar, which should split to
-			// FOO Bar
-			if lastClass == classUpper && class != classNumber {
+			// FOO Bar.
+			switch {
+			case lastClass == classUpper && class != classNumber:
 				if i-lastIdx > 1 {
 					out = append(out, string(runes[lastIdx:i-1]))
 					lastIdx = i - 1
 				}
-			} else {
+			default:
 				out = append(out, string(runes[lastIdx:i]))
 				lastIdx = i
 			}
@@ -51,7 +54,6 @@ func camelSplit(src string) []string {
 			out = append(out, string(runes[lastIdx:]))
 		}
 		lastClass = class
-
 	}
 
 	return out

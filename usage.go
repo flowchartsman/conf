@@ -11,12 +11,12 @@ import (
 
 func printUsage(fields []field, c context) {
 
-	// sort the fields, by their long name
+	// sort the fields, by their long name.
 	sort.SliceStable(fields, func(i, j int) bool {
 		return fields[i].flagName < fields[j].flagName
 	})
 
-	// put conf and help last
+	// Put confif and help last.
 	if c.confFlag != "" {
 		confFlagField := field{
 			flagName: c.confFlag,
@@ -27,6 +27,7 @@ func printUsage(fields []field, c context) {
 		}
 		fields = append(fields, confFlagField)
 	}
+
 	fields = append(fields, field{
 		flagName:  "help",
 		boolField: true,
@@ -55,6 +56,7 @@ func printUsage(fields []field, c context) {
 			fmt.Fprintf(w, "      %s\t\t\n", help)
 		}
 	}
+
 	w.Flush()
 	fmt.Fprintf(os.Stderr, "\n")
 	if c.confFile != "" {
@@ -75,9 +77,10 @@ func printUsage(fields []field, c context) {
 // 'true' value and their absence with a 'false' value. If a type cannot be
 // determined, it will simply give the name "value". Slices will be annotated
 // as "<Type>,[Type...]", where "Type" is whatever type name was chosen.
-// (adapted from package flag)
+// (adapted from package flag).
 func getTypeAndHelp(f *field) (name string, usage string) {
-	// Look for a single-quoted name
+
+	// Look for a single-quoted name.
 	usage = f.options.help
 	for i := 0; i < len(usage); i++ {
 		if usage[i] == '\'' {
@@ -94,11 +97,13 @@ func getTypeAndHelp(f *field) (name string, usage string) {
 	var isSlice bool
 	if f.field.IsValid() {
 		t := f.field.Type()
-		// if it's a pointer, we want to deref
+
+		// If it's a pointer, we want to deref.
 		if t.Kind() == reflect.Ptr {
 			t = t.Elem()
 		}
-		// if it's a slice, we want the type of the slice elements
+
+		// If it's a slice, we want the type of the slice elements.
 		if t.Kind() == reflect.Slice {
 			t = t.Elem()
 			isSlice = true
@@ -130,6 +135,7 @@ func getTypeAndHelp(f *field) (name string, usage string) {
 			}
 		}
 	}
+
 	switch {
 	case isSlice:
 		name = fmt.Sprintf("<%s>,[%s...]", name, name)

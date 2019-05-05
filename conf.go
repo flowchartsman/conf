@@ -7,24 +7,25 @@ import (
 )
 
 var (
+
 	// ErrInvalidStruct indicates that a configuration struct is not the correct type.
 	ErrInvalidStruct = errors.New("configuration must be a struct pointer")
 )
 
 type context struct {
-	confFlag string
+	confFlag string // TODO: Is using conf redudant?
 	confFile string
 	sources  []Source
 }
 
-// Parse parses configuration into the provided struct
+// Parse parses configuration into the provided struct.
 func Parse(confStruct interface{}, options ...Option) error {
 	_, err := ParseWithArgs(confStruct, options...)
 	return err
 }
 
 // ParseWithArgs parses configuration into the provided struct, returning the
-// remaining args after flag parsing
+// remaining args after flag parsing.
 func ParseWithArgs(confStruct interface{}, options ...Option) ([]string, error) {
 	var c context
 	for _, option := range options {
@@ -35,16 +36,13 @@ func ParseWithArgs(confStruct interface{}, options ...Option) ([]string, error) 
 	if err != nil {
 		return nil, err
 	}
-
 	if len(fields) == 0 {
 		return nil, errors.New("no settable flags found in struct")
 	}
 
-	sources := make([]Source, 0, 3)
-
-	// Process flags and create flag source. If help is requested, print useage
-	// and exit.
-	fs, args, err := newFlagSource(fields, []string{c.confFlag})
+	// Process flags and create a flag source.
+	// If help is requested, print useage and exit.
+	flagSource, args, err := newFlagSource(fields, []string{c.confFlag})
 	switch err {
 	case nil:
 	case errHelpWanted:
@@ -54,42 +52,50 @@ func ParseWithArgs(confStruct interface{}, options ...Option) ([]string, error) 
 		return nil, err
 	}
 
-	sources = append(sources, fs)
+	// Start collection the set of sources we need to check.
+	var sources []Source
+	sources = append(sources, flagSource)
 
-	// create config file source, if specified
+	// Create the file source, if specified to do so. Then
+	// add the source to the collection of sources.
 	if c.confFile != "" || c.confFlag != "" {
 		configFile := c.confFile
 		fromFlag := false
-		// if there's a config file flag, and it's set, use that filename instead
-		if configFileFromFlags, ok := fs.Get([]string{c.confFlag}); ok {
+
+		// If there's a config file flag, and it's set, use that filename instead.
+		if configFileFromFlags, ok := flagSource.Get([]string{c.confFlag}); ok {
 			configFile = configFileFromFlags
 			fromFlag = true
 		}
-		cs, err := newConfSource(configFile)
-		if err != nil {
-			if os.IsNotExist(err) {
+
+		// Create a file source for this config file.
+		fileSource, err := newFileSource(configFile)
+		switch {
+		case err != nil:
+			switch {
+			case os.IsNotExist(err):
+
 				// The file doesn't exist. If it was specified by a flag, treat this
 				// as an error, since presumably the user either made a mistake, or
-				// the file they deliberately specified isn't there
+				// the file they deliberately specified isn't there.
 				if fromFlag {
 					return nil, err
 				}
-			} else {
+			default:
 				return nil, err
 			}
-		} else {
-			sources = append(sources, cs)
+		default:
+			sources = append(sources, fileSource)
 		}
 	}
 
-	// create env souce
-	es := new(envSource)
-	sources = append(sources, es)
+	// Add the environment source to the list by default.
+	sources = append(sources, &envSource{})
 
-	// append any additional sources
+	// TODO: WERE ARE THESE COMING FROM? Append any additional source.
 	sources = append(sources, c.sources...)
-	// process all fields
 
+	// Process all fields.
 	for _, field := range fields {
 		var value string
 		var found bool
@@ -129,8 +135,8 @@ type processError struct {
 	err       error
 }
 
-func (e *processError) Error() string {
-	return fmt.Sprintf("conf: error assigning to field %s: converting '%s' to type %s. details: %s", e.fieldName, e.value, e.typeName, e.err)
+func (pe *processError) Error() string {
+	return fmt.Sprintf("conf: error assigning to field %s: converting '%s' to type %s. details: %s", pe.fieldName, pe.value, pe.typeName, pe.err)
 }
 
 // Source represents a source of configuration data. Sources requiring
@@ -138,7 +144,8 @@ func (e *processError) Error() string {
 // loaded so that sources further down the chain are not queried if they're
 // not going to be needed.
 type Source interface {
+
 	// Get takes a location specified by a key and returns a string and whether
-	// or not the value was set in the source
+	// or not the value was set in the source.
 	Get(key []string) (value string, found bool)
 }

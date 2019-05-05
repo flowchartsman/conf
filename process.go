@@ -12,7 +12,7 @@ import (
 func processField(value string, field reflect.Value) error {
 	typ := field.Type()
 
-	// look for Set method
+	// Look for a Set method.
 	setter := setterFrom(field)
 	if setter != nil {
 		return setter.Set(value)
@@ -110,10 +110,12 @@ func processField(value string, field reflect.Value) error {
 }
 
 func interfaceFrom(field reflect.Value, fn func(interface{}, *bool)) {
-	// it may be impossible for a struct field to fail this check
+
+	// It may be impossible for a struct field to fail this check.
 	if !field.CanInterface() {
 		return
 	}
+
 	var ok bool
 	fn(field.Interface(), &ok)
 	if !ok && field.CanAddr() {

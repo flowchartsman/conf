@@ -6,25 +6,25 @@ import (
 	"strings"
 )
 
-// confSource is a source for config files in an extremely simple format. Each
+// fileSource is a source for config files in an extremely simple format. Each
 // line is tokenized as a single key/value pair. The first whitespace-delimited
 // token in the line is interpreted as the flag name, and all remaining tokens
 // are interpreted as the value. Any leading hyphens on the flag name are
 // ignored.
-type confSource struct {
+type fileSource struct {
 	m map[string]string
 }
 
-func newConfSource(filename string) (*confSource, error) {
+func newFileSource(filename string) (*fileSource, error) {
 	m := make(map[string]string)
 
-	cf, err := os.Open(filename)
+	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
-	defer cf.Close()
+	defer file.Close()
 
-	s := bufio.NewScanner(cf)
+	s := bufio.NewScanner(file)
 	for s.Scan() {
 		line := strings.TrimSpace(s.Text())
 		if line == "" {
@@ -52,14 +52,13 @@ func newConfSource(filename string) (*confSource, error) {
 
 		m[name] = value
 	}
-	return &confSource{
-		m: m,
-	}, nil
+
+	return &fileSource{m: m}, nil
 }
 
 // Get returns the stringfied value stored at the specified key in the plain
-// config file
-func (p *confSource) Get(key []string) (string, bool) {
+// config file.
+func (p *fileSource) Get(key []string) (string, bool) {
 	k := getEnvName(key)
 	value, ok := p.m[k]
 	return value, ok
