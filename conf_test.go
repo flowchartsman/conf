@@ -36,7 +36,7 @@ func NewSource(src int, v interface{}) (conf.Sourcer, error) {
 		args := v.(map[string]string)
 		os.Clearenv()
 		for k, v := range args {
-			os.Setenv(k, v)
+			os.Setenv("TEST_"+k, v)
 		}
 		return source.NewEnv("TEST")
 
@@ -69,9 +69,9 @@ func NewSource(src int, v interface{}) (conf.Sourcer, error) {
 
 func TestBasicParse(t *testing.T) {
 	type config struct {
-		TestInt    int    `conf:"default:9"`
-		TestString string `conf:"default:B"`
-		TestBool   bool   `conf:"default:true"`
+		AnInt   int    `conf:"default:9"`
+		AString string `conf:"default:B,short:s"`
+		Bool    bool
 	}
 
 	tests := []struct {
@@ -80,10 +80,10 @@ func TestBasicParse(t *testing.T) {
 		args interface{}
 		want config
 	}{
-		{"basic-default", DEFAULT, nil, config{9, "B", true}},
-		{"basic-env", ENV, map[string]string{"TEST_INT": "1", "TEST_STRING": "s", "TEST_BOOL": "TRUE"}, config{1, "s", true}},
-		{"basic-flag", FLAG, []string{"--test-int", "1", "--test-string", "s", "--test-bool"}, config{1, "s", true}},
-		{"basic-file", FILE, map[string]string{"TEST_INT": "1", "TEST_STRING": "s", "TEST_BOOL": "TRUE"}, config{1, "s", true}},
+		{"basic-default", DEFAULT, nil, config{9, "B", false}},
+		{"basic-env", ENV, map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"}, config{1, "s", true}},
+		{"basic-flag", FLAG, []string{"--an-int", "1", "-s", "s", "--bool"}, config{1, "s", true}},
+		{"basic-file", FILE, map[string]string{"AN_INT": "1", "S": "s", "BOOL": "TRUE"}, config{1, "s", true}},
 	}
 
 	t.Log("Given the need to parse basic configuration.")
@@ -118,9 +118,9 @@ func TestBasicParse(t *testing.T) {
 
 func TestMultiSource(t *testing.T) {
 	type config struct {
-		TestInt    int
-		TestString string
-		TestBool   bool
+		AnInt   int    `conf:"default:9"`
+		AString string `conf:"default:B,short:s"`
+		Bool    bool
 	}
 
 	tests := []struct {
@@ -137,8 +137,8 @@ func TestMultiSource(t *testing.T) {
 				src  int
 				args interface{}
 			}{
-				{ENV, map[string]string{"TEST_INT": "1", "TEST_STRING": "s", "TEST_BOOL": "TRUE"}},
-				{FLAG, []string{"--test-int", "2", "--test-bool", "FALSE"}},
+				{ENV, map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"}},
+				{FLAG, []string{"--an-int", "2", "-s", "s", "--bool", "false"}},
 			},
 			want: config{2, "s", false},
 		},
@@ -163,6 +163,52 @@ func TestMultiSource(t *testing.T) {
 					}
 
 					if err := conf.Parse(&cfg, sources...); err != nil {
+						t.Fatalf("\t%s\tShould be able to Parse arguments : %s.", failed, err)
+					}
+					t.Logf("\t%s\tShould be able to Parse arguments.", success)
+
+					if diff := cmp.Diff(tt.want, cfg); diff != "" {
+						t.Fatalf("\t%s\tShould have properly initialized struct value\n%s", failed, diff)
+					}
+					t.Logf("\t%s\tShould have properly initialized struct value.", success)
+				}
+
+				t.Run(tt.name, f)
+			}
+		}
+	}
+}
+
+func TestFlagParse(t *testing.T) {
+	type config struct {
+		AnInt   int    `conf:"short:i"`
+		AString string `conf:"default:B"`
+		Bool    bool   `conf:"default:true"`
+	}
+
+	tests := []struct {
+		name string
+		src  int
+		args interface{}
+		want config
+	}{
+		{"basic-flag", FLAG, []string{"-i", "1", "--a-string", "s", "--bool"}, config{1, "s", true}},
+	}
+
+	t.Log("Given the need to parse basic configuration.")
+	{
+		for i, tt := range tests {
+			t.Logf("\tTest: %d\tWhen checking %s with arguments %s", i, srcNames[tt.src], tt.args)
+			{
+				f := func(t *testing.T) {
+					sourcer, err := NewSource(tt.src, tt.args)
+					if err != nil {
+						t.Fatalf("\t%s\tShould be able to create a new %s source : %s.", failed, srcNames[tt.src], err)
+					}
+					t.Logf("\t%s\tShould be able to create a new %s source.", success, srcNames[tt.src])
+
+					var cfg config
+					if err := conf.Parse(&cfg, sourcer); err != nil {
 						t.Fatalf("\t%s\tShould be able to Parse arguments : %s.", failed, err)
 					}
 					t.Logf("\t%s\tShould be able to Parse arguments.", success)
@@ -206,7 +252,7 @@ func TestParseErrors(t *testing.T) {
 				}
 				t.Logf("\t%s\tShould NOT be able to pass anything but a struct value.", success)
 			}
-			t.Run("no-struct-value", f)
+			t.Run("not-struct-value", f)
 		}
 
 		t.Logf("\tTest: %d\tWhen bad tags to Parse.", 1)
@@ -224,14 +270,25 @@ func TestParseErrors(t *testing.T) {
 				t.Logf("\t%s\tShould NOT be able to accept tag missing value.", success)
 			}
 			t.Run("tag-missing-value", f)
+
+			f = func(t *testing.T) {
+				var cfg struct {
+					TestInt    int `conf:"short:ab"`
+					TestString string
+					TestBool   bool
+				}
+				err := conf.Parse(&cfg)
+				if err == nil {
+					t.Fatalf("\t%s\tShould NOT be able to accept invalid short tag.", failed)
+				}
+				t.Logf("\t%s\tShould NOT be able to accept invalid short tag.", success)
+			}
+			t.Run("tag-bad-short", f)
 		}
 	}
 }
 
 func TestSkipedFieldIsSkipped(t *testing.T) {
-}
-
-func TestBadShortTagIsError(t *testing.T) {
 }
 
 func TestCannotSetRequiredAndDefaultTags(t *testing.T) {
