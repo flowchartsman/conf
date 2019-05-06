@@ -44,9 +44,9 @@ func NewEnv(namespace string) (*Env, error) {
 	return &Env{m: m}, nil
 }
 
-// Get implements the confg.Source interface. It returns the stringfied value
+// Source implements the confg.Sourcer interface. It returns the stringfied value
 // stored at the specified key from the environment.
-func (e *Env) Get(key []string) (string, bool) {
+func (e *Env) Source(key []string) (string, bool) {
 	env := strings.ToUpper(strings.Join(key, `_`))
 	return os.LookupEnv(env)
 }

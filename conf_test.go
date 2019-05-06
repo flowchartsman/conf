@@ -18,18 +18,24 @@ const (
 )
 
 const (
-	ENV = iota + 1
+	DEFAULT = iota
+	ENV
 	FLAG
 	FILE
 )
 
+var srcNames = []string{"DEFAULT", "ENV", "FLAG", "FILE"}
+
 // NewSource returns an initialized source for a given type.
-func NewSource(src int, v interface{}) (conf.Source, error) {
+func NewSource(src int, v interface{}) (conf.Sourcer, error) {
 	switch src {
+	case DEFAULT:
+		return nil, nil
+
 	case ENV:
-		vars := v.(map[string]string)
+		args := v.(map[string]string)
 		os.Clearenv()
-		for k, v := range vars {
+		for k, v := range args {
 			os.Setenv(k, v)
 		}
 		return source.NewEnv("TEST")
@@ -39,21 +45,23 @@ func NewSource(src int, v interface{}) (conf.Source, error) {
 		return source.NewFlag(args)
 
 	case FILE:
-		d := v.(struct {
-			file *os.File
-			vars map[string]string
-		})
+		args := v.(map[string]string)
+		tf, err := ioutil.TempFile("", "conf-test")
+		if err != nil {
+			return nil, err
+		}
+		defer os.Remove(tf.Name())
 		var vars string
-		for k, v := range d.vars {
+		for k, v := range args {
 			vars += fmt.Sprintf("%s %s\n", k, v)
 		}
-		if _, err := d.file.WriteString(vars); err != nil {
+		if _, err := tf.WriteString(vars); err != nil {
 			return nil, err
 		}
-		if err := d.file.Close(); err != nil {
+		if err := tf.Close(); err != nil {
 			return nil, err
 		}
-		return source.NewFile(d.file.Name())
+		return source.NewFile(tf.Name())
 	}
 
 	return nil, errors.New("invalid source provided")
@@ -61,73 +69,42 @@ func NewSource(src int, v interface{}) (conf.Source, error) {
 
 func TestBasicParse(t *testing.T) {
 	type config struct {
-		TestInt    int
-		TestString string
-		TestBool   bool
+		TestInt    int    `conf:"default:9"`
+		TestString string `conf:"default:B"`
+		TestBool   bool   `conf:"default:true"`
 	}
 
 	tests := []struct {
 		name string
 		src  int
 		args interface{}
+		want config
 	}{
-		{"basic-flag", FLAG, []string{"--test-int", "1", "--test-string", "s", "--test-bool"}},
-		{"basic-env", ENV, map[string]string{"TEST_INT": "1", "TEST_STRING": "s", "TEST_BOOL": "TRUE"}},
-		{"basic-file", FILE, map[string]string{"TEST_INT": "1", "TEST_STRING": "s", "TEST_BOOL": "TRUE"}},
+		{"basic-default", DEFAULT, nil, config{9, "B", true}},
+		{"basic-env", ENV, map[string]string{"TEST_INT": "1", "TEST_STRING": "s", "TEST_BOOL": "TRUE"}, config{1, "s", true}},
+		{"basic-flag", FLAG, []string{"--test-int", "1", "--test-string", "s", "--test-bool"}, config{1, "s", true}},
+		{"basic-file", FILE, map[string]string{"TEST_INT": "1", "TEST_STRING": "s", "TEST_BOOL": "TRUE"}, config{1, "s", true}},
 	}
 
-	t.Log("Given the need to parse configuration.")
+	t.Log("Given the need to parse basic configuration.")
 	{
 		for i, tt := range tests {
-			t.Logf("\tTest: %d\tWhen checking this %d with arguments %s", i, tt.src, tt.args)
+			t.Logf("\tTest: %d\tWhen checking %s with arguments %s", i, srcNames[tt.src], tt.args)
 			{
 				f := func(t *testing.T) {
-					var source conf.Source
-
-					switch tt.src {
-					case ENV, FLAG:
-						var err error
-						source, err = NewSource(tt.src, tt.args)
-						if err != nil {
-							t.Fatalf("\t%s\tShould be able to call NewFlag : %s.", failed, err)
-						}
-						t.Logf("\t%s\tShould be able to call NewFlag.", success)
-
-					case FILE:
-						tf, err := ioutil.TempFile("", "conf-test")
-						if err != nil {
-							t.Fatalf("\t%s\tShould be able to create a temp file : %s.", failed, err)
-						}
-						t.Logf("\t%s\tShould be able to create a temp file.", success)
-						defer os.Remove(tf.Name())
-
-						d := struct {
-							file *os.File
-							vars map[string]string
-						}{
-							file: tf,
-							vars: tt.args.(map[string]string),
-						}
-
-						source, err = NewSource(tt.src, d)
-						if err != nil {
-							t.Fatalf("\t%s\tShould be able to call NewFlag : %s.", failed, err)
-						}
-						t.Logf("\t%s\tShould be able to call NewFlag.", success)
+					sourcer, err := NewSource(tt.src, tt.args)
+					if err != nil {
+						t.Fatalf("\t%s\tShould be able to create a new %s source : %s.", failed, srcNames[tt.src], err)
 					}
+					t.Logf("\t%s\tShould be able to create a new %s source.", success, srcNames[tt.src])
 
 					var cfg config
-					if err := conf.Parse(&cfg, source); err != nil {
+					if err := conf.Parse(&cfg, sourcer); err != nil {
 						t.Fatalf("\t%s\tShould be able to Parse arguments : %s.", failed, err)
 					}
 					t.Logf("\t%s\tShould be able to Parse arguments.", success)
 
-					want := config{
-						TestInt:    1,
-						TestString: "s",
-						TestBool:   true,
-					}
-					if diff := cmp.Diff(want, cfg); diff != "" {
+					if diff := cmp.Diff(tt.want, cfg); diff != "" {
 						t.Fatalf("\t%s\tShould have properly initialized struct value\n%s", failed, diff)
 					}
 					t.Logf("\t%s\tShould have properly initialized struct value.", success)
@@ -140,18 +117,118 @@ func TestBasicParse(t *testing.T) {
 }
 
 func TestMultiSource(t *testing.T) {
+	type config struct {
+		TestInt    int
+		TestString string
+		TestBool   bool
+	}
+
+	tests := []struct {
+		name    string
+		sources []struct {
+			src  int
+			args interface{}
+		}
+		want config
+	}{
+		{
+			name: "basic-env-flag",
+			sources: []struct {
+				src  int
+				args interface{}
+			}{
+				{ENV, map[string]string{"TEST_INT": "1", "TEST_STRING": "s", "TEST_BOOL": "TRUE"}},
+				{FLAG, []string{"--test-int", "2", "--test-bool", "FALSE"}},
+			},
+			want: config{2, "s", false},
+		},
+	}
+
+	t.Log("Given the need to parse multi-source configurations.")
+	{
+		for i, tt := range tests {
+			t.Logf("\tTest: %d\tWhen checking %d sources", i, len(tt.sources))
+			{
+				f := func(t *testing.T) {
+					var cfg config
+
+					sources := make([]conf.Sourcer, len(tt.sources))
+					for i, ttt := range tt.sources {
+						sourcer, err := NewSource(ttt.src, ttt.args)
+						if err != nil {
+							t.Fatalf("\t%s\tShould be able to create a new %s source : %s.", failed, srcNames[ttt.src], err)
+						}
+						t.Logf("\t%s\tShould be able to create a new %s source.", success, srcNames[ttt.src])
+						sources[i] = sourcer
+					}
+
+					if err := conf.Parse(&cfg, sources...); err != nil {
+						t.Fatalf("\t%s\tShould be able to Parse arguments : %s.", failed, err)
+					}
+					t.Logf("\t%s\tShould be able to Parse arguments.", success)
+
+					if diff := cmp.Diff(tt.want, cfg); diff != "" {
+						t.Fatalf("\t%s\tShould have properly initialized struct value\n%s", failed, diff)
+					}
+					t.Logf("\t%s\tShould have properly initialized struct value.", success)
+				}
+
+				t.Run(tt.name, f)
+			}
+		}
+	}
 }
 
-func TestParseNonRefIsError(t *testing.T) {
-}
+func TestParseErrors(t *testing.T) {
+	t.Log("Given the need to validate errors that can occur with Parse.")
+	{
+		t.Logf("\tTest: %d\tWhen passing bad values to Parse.", 0)
+		{
+			f := func(t *testing.T) {
+				var cfg struct {
+					TestInt    int
+					TestString string
+					TestBool   bool
+				}
+				err := conf.Parse(cfg)
+				if err == nil {
+					t.Fatalf("\t%s\tShould NOT be able to accept a value by value.", failed)
+				}
+				t.Logf("\t%s\tShould NOT be able to accept a value by value.", success)
+			}
+			t.Run("not-by-ref", f)
 
-func TestParseNonStructIsError(t *testing.T) {
+			f = func(t *testing.T) {
+				var cfg []string
+				err := conf.Parse(cfg)
+				if err == nil {
+					t.Fatalf("\t%s\tShould NOT be able to pass anything but a struct value.", failed)
+				}
+				t.Logf("\t%s\tShould NOT be able to pass anything but a struct value.", success)
+			}
+			t.Run("no-struct-value", f)
+		}
+
+		t.Logf("\tTest: %d\tWhen bad tags to Parse.", 1)
+		{
+			f := func(t *testing.T) {
+				var cfg struct {
+					TestInt    int `conf:"default:"`
+					TestString string
+					TestBool   bool
+				}
+				err := conf.Parse(&cfg)
+				if err == nil {
+					t.Fatalf("\t%s\tShould NOT be able to accept tag missing value.", failed)
+				}
+				t.Logf("\t%s\tShould NOT be able to accept tag missing value.", success)
+			}
+			t.Run("tag-missing-value", f)
+		}
+	}
 }
 
 func TestSkipedFieldIsSkipped(t *testing.T) {
-}
-
-func TestTagMissingValueIsError(t *testing.T) {
 }
 
 func TestBadShortTagIsError(t *testing.T) {

@@ -58,9 +58,9 @@ func NewFile(filename string) (*File, error) {
 	return &File{m: m}, nil
 }
 
-// Get implements the confg.Source interface. It returns the stringfied value
+// Source implements the confg.Sourcer interface. It returns the stringfied value
 // stored at the specified key in the plain config file.
-func (f *File) Get(key []string) (string, bool) {
+func (f *File) Source(key []string) (string, bool) {
 	k := strings.ToUpper(strings.Join(key, `_`))
 	value, ok := f.m[k]
 	return value, ok

@@ -22,19 +22,17 @@ func (err *fieldError) Error() string {
 	return fmt.Sprintf("conf: error assigning to field %s: converting '%s' to type %s. details: %s", err.fieldName, err.value, err.typeName, err.err)
 }
 
-// Source represents a source of configuration data. Sources requiring
-// the pre-fetching and processing of several values should ideally be lazily-
-// loaded so that sources further down the chain are not queried if they're
-// not going to be needed.
-type Source interface {
+// Sourcer provides the ability to source data from a configuration source.
+// Consider the use of lazy-loading for sourcing large datasets or systems.
+type Sourcer interface {
 
-	// Get takes the field key and attempts to locate that key in its
+	// Source takes the field key and attempts to locate that key in its
 	// configuration data. Returns true if found with the value.
-	Get(key []string) (string, bool)
+	Source(key []string) (string, bool)
 }
 
 // Parse parses configuration into the provided struct.
-func Parse(cfgStruct interface{}, sources ...Source) error {
+func Parse(cfgStruct interface{}, sources ...Sourcer) error {
 
 	// Get the list of fields from the configuration struct to process.
 	fields, err := extractFields(nil, cfgStruct)
@@ -47,27 +45,32 @@ func Parse(cfgStruct interface{}, sources ...Source) error {
 
 	// Process all fields found in the config struct provided.
 	for _, field := range fields {
-		var value string
-		var found bool
+
+		// Set any default value into the struct for this field.
+		if field.options.defaultStr != "" {
+			if err := processField(field.options.defaultStr, field.field); err != nil {
+				return &fieldError{
+					fieldName: field.name,
+					typeName:  field.field.Type().String(),
+					value:     field.options.defaultStr,
+					err:       err,
+				}
+			}
+		}
 
 		// Process each field against all sources.
-		for _, source := range sources {
-			value, found = source.Get(field.key)
-			if found {
-				break
+		var provided bool
+		for _, sourcer := range sources {
+			if sourcer == nil {
+				continue
 			}
-		}
 
-		// If this key is not provided, check if required or use default.
-		if !found {
-			if field.options.required {
-				return fmt.Errorf("required field %s is missing value", field.name)
+			var value string
+			if value, provided = sourcer.Source(field.key); !provided {
+				continue
 			}
-			value = field.options.defaultStr
-		}
 
-		// If this config field will be set to it's zero value, return an error.
-		if value != "" {
+			// A value was found so update the struct value with it.
 			if err := processField(value, field.field); err != nil {
 				return &fieldError{
 					fieldName: field.name,
@@ -77,6 +80,15 @@ func Parse(cfgStruct interface{}, sources ...Source) error {
 				}
 			}
 		}
+
+		// If this key is not provided by any source, check if it was
+		// required to be provided.
+		if !provided && field.options.required {
+			return fmt.Errorf("required field %s is missing value", field.name)
+		}
+
+		// TODO : If this config field will be set to it's zero value, return an error.
+		// ANDY I NEED TO UNDERSTAND WHY YOU HAD THIS. SOME PEOPLE LIKE TO BE EXPLICIT.
 	}
 
 	return nil

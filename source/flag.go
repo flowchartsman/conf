@@ -89,9 +89,9 @@ func NewFlag(args []string) (*Flag, error) {
 	return &Flag{m: m}, nil
 }
 
-// Get implements the confg.Source interface. Returns the stringfied value
+// Source implements the confg.Sourcer interface. Returns the stringfied value
 // stored at the specified key from the flag source.
-func (f *Flag) Get(key []string) (string, bool) {
+func (f *Flag) Source(key []string) (string, bool) {
 	k := strings.ToLower(strings.Join(key, `-`))
 	val, found := f.m[k]
 	return val, found
