@@ -37,7 +37,7 @@ func NewSource(src int, v interface{}) (conf.Sourcer, error) {
 		args := v.(map[string]string)
 		os.Clearenv()
 		for k, v := range args {
-			os.Setenv("TEST_"+k, v)
+			os.Setenv(k, v)
 		}
 		return source.NewEnv("TEST")
 
@@ -68,12 +68,21 @@ func NewSource(src int, v interface{}) (conf.Sourcer, error) {
 	return nil, errors.New("invalid source provided")
 }
 
-func TestBasicParse(t *testing.T) {
+func TestParse(t *testing.T) {
+	type ip struct {
+		Name string `conf:"default:localhost"`
+		IP   string `conf:"default:127.0.0.0"`
+	}
+	type Embed struct {
+		Name string `conf:"default:bill"`
+	}
 	type config struct {
 		AnInt   int    `conf:"default:9"`
 		AString string `conf:"default:B,short:s"`
 		Bool    bool
-		Skip    []float64 `conf:"-"`
+		Skip    string `conf:"-"`
+		IP      ip
+		Embed
 	}
 
 	tests := []struct {
@@ -82,16 +91,16 @@ func TestBasicParse(t *testing.T) {
 		args interface{}
 		want config
 	}{
-		{"basic-default", DEFAULT, nil, config{9, "B", false, nil}},
-		{"basic-env", ENV, map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"}, config{1, "s", true, nil}},
-		{"basic-flag", FLAG, []string{"--an-int", "1", "-s", "s", "--bool"}, config{1, "s", true, nil}},
-		{"basic-file", FILE, map[string]string{"AN_INT": "1", "S": "s", "BOOL": "TRUE"}, config{1, "s", true, nil}},
+		{"default", DEFAULT, nil, config{9, "B", false, "", ip{"localhost", "127.0.0.0"}, Embed{"bill"}}},
+		{"env", ENV, map[string]string{"TEST_AN_INT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE", "TEST_SKIP": "SKIP", "TEST_IP_NAME": "local", "TEST_NAME": "andy"}, config{1, "s", true, "", ip{"local", "127.0.0.0"}, Embed{"andy"}}},
+		{"flag", FLAG, []string{"--an-int", "1", "-s", "s", "--bool", "--skip", "skip", "--ip-name", "local", "--name", "andy"}, config{1, "s", true, "", ip{"local", "127.0.0.0"}, Embed{"andy"}}},
+		{"file", FILE, map[string]string{"AN_INT": "1", "S": "s", "BOOL": "TRUE", "SKIP": "skip", "IP_NAME": "local", "NAME": "andy"}, config{1, "s", true, "", ip{"local", "127.0.0.0"}, Embed{"andy"}}},
 	}
 
 	t.Log("Given the need to parse basic configuration.")
 	{
 		for i, tt := range tests {
-			t.Logf("\tTest: %d\tWhen checking %s with arguments %s", i, srcNames[tt.src], tt.args)
+			t.Logf("\tTest: %d\tWhen checking %s with arguments %v", i, srcNames[tt.src], tt.args)
 			{
 				f := func(t *testing.T) {
 					sourcer, err := NewSource(tt.src, tt.args)
@@ -139,7 +148,7 @@ func TestMultiSource(t *testing.T) {
 				src  int
 				args interface{}
 			}{
-				{ENV, map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"}},
+				{ENV, map[string]string{"TEST_AN_INT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"}},
 				{FLAG, []string{"--an-int", "2", "-s", "s", "--bool", "false"}},
 			},
 			want: config{2, "s", false},
@@ -227,7 +236,7 @@ func TestFlagParse(t *testing.T) {
 	}
 }
 
-func TestParseErrors(t *testing.T) {
+func TestErrors(t *testing.T) {
 	t.Log("Given the need to validate errors that can occur with Parse.")
 	{
 		t.Logf("\tTest: %d\tWhen passing bad values to Parse.", 0)
@@ -386,7 +395,7 @@ func ExampleString() {
 	}{
 		name: "basic-env",
 		src:  ENV,
-		args: map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"},
+		args: map[string]string{"TEST_AN_INT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"},
 	}
 
 	sourcer, err := NewSource(test.src, test.args)
@@ -411,13 +420,4 @@ func ExampleString() {
 
 	// Output:
 	// an-int=1 a-string=s bool=true
-}
-
-func TestSkipedFieldIsSkipped(t *testing.T) {
-}
-
-func TestHierarchicalFieldNames(t *testing.T) {
-}
-
-func TestEmbeddedFieldNames(t *testing.T) {
 }

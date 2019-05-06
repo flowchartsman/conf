@@ -9,16 +9,16 @@ import (
 // ErrInvalidStruct indicates that a configuration struct is not the correct type.
 var ErrInvalidStruct = errors.New("configuration must be a struct pointer")
 
-// A fieldError occurs when an error occurs updating an individual field
+// A FieldError occurs when an error occurs updating an individual field
 // in the provided struct value.
-type fieldError struct {
+type FieldError struct {
 	fieldName string
 	typeName  string
 	value     string
 	err       error
 }
 
-func (err *fieldError) Error() string {
+func (err *FieldError) Error() string {
 	return fmt.Sprintf("conf: error assigning to field %s: converting '%s' to type %s. details: %s", err.fieldName, err.value, err.typeName, err.err)
 }
 
@@ -49,7 +49,7 @@ func Parse(cfgStruct interface{}, sources ...Sourcer) error {
 		// Set any default value into the struct for this field.
 		if field.options.defaultStr != "" {
 			if err := processField(field.options.defaultStr, field.field); err != nil {
-				return &fieldError{
+				return &FieldError{
 					fieldName: field.name,
 					typeName:  field.field.Type().String(),
 					value:     field.options.defaultStr,
@@ -80,7 +80,7 @@ func Parse(cfgStruct interface{}, sources ...Sourcer) error {
 
 			// A value was found so update the struct value with it.
 			if err := processField(value, field.field); err != nil {
-				return &fieldError{
+				return &FieldError{
 					fieldName: field.name,
 					typeName:  field.field.Type().String(),
 					value:     value,

@@ -9,8 +9,7 @@ import (
 
 // Env is a source for environmental variables.
 type Env struct {
-	namespace string
-	m         map[string]string
+	m map[string]string
 }
 
 // NewEnv accepts a namespace and parses the environment into a Env for
@@ -42,13 +41,13 @@ func NewEnv(namespace string) (*Env, error) {
 		return nil, fmt.Errorf("namespace %q was not found", namespace)
 	}
 
-	return &Env{namespace: namespace, m: m}, nil
+	return &Env{m: m}, nil
 }
 
 // Source implements the confg.Sourcer interface. It returns the stringfied value
 // stored at the specified key from the environment.
 func (e *Env) Source(key []string) (string, bool) {
-	k := e.namespace + "_" + strings.ToUpper(strings.Join(key, ``))
+	k := strings.ToUpper(strings.Join(key, `_`))
 	v, ok := e.m[k]
 	return v, ok
 }
