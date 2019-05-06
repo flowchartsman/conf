@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/flowchartsman/conf"
@@ -289,6 +290,70 @@ func TestParseErrors(t *testing.T) {
 	}
 }
 
+func TestUsage(t *testing.T) {
+	t.Log("Given the need validate usage output.")
+	{
+		t.Logf("\tTest: %d\tWhen using a basic struct.", 0)
+		{
+			type config struct {
+				AnInt   int    `conf:"default:9"`
+				AString string `conf:"default:B,short:s"`
+				Bool    bool
+				Skip    []float64 `conf:"-"`
+			}
+
+			test := struct {
+				name string
+				src  int
+				args interface{}
+			}{
+				name: "basic-env",
+				src:  ENV,
+				args: map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"},
+			}
+
+			sourcer, err := NewSource(test.src, test.args)
+			if err != nil {
+				fmt.Print(err)
+				return
+			}
+
+			var cfg config
+			if err := conf.Parse(&cfg, sourcer); err != nil {
+				fmt.Print(err)
+				return
+			}
+
+			got, err := conf.Usage(&cfg)
+			if err != nil {
+				fmt.Print(err)
+				return
+			}
+
+			got = strings.TrimRight(got, " \n")
+			want := `Usage: conf.test [options] [arguments]
+
+OPTIONS
+  --a-string/-s/$a-string <string>  (default: B)  
+  --an-int/$an-int <int>            (default: 9)  
+  --bool/$bool                                    
+  --help/-h                                       
+      display this help message`
+
+			bGot := []byte(got)
+			bWant := []byte(want)
+			if diff := cmp.Diff(bGot, bWant); diff != "" {
+				t.Log("got:\n", got)
+				t.Log("\n", bGot)
+				t.Log("wait:\n", want)
+				t.Log("\n", bWant)
+				t.Fatalf("\t%s\tShould match byte for byte the output.", failed)
+			}
+			t.Logf("\t%s\tShould match byte for byte the output.", success)
+		}
+	}
+}
+
 func ExampleString() {
 	type config struct {
 		AnInt   int    `conf:"default:9"`
@@ -328,56 +393,7 @@ func ExampleString() {
 	fmt.Print(out)
 
 	// Output:
-	// an-int=1 s=s bool=true
-}
-
-func ExampleUsage() {
-	type config struct {
-		AnInt   int    `conf:"default:9"`
-		AString string `conf:"default:B,short:s"`
-		Bool    bool
-		Skip    []float64 `conf:"-"`
-	}
-
-	test := struct {
-		name string
-		src  int
-		args interface{}
-	}{
-		name: "basic-env",
-		src:  ENV,
-		args: map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"},
-	}
-
-	sourcer, err := NewSource(test.src, test.args)
-	if err != nil {
-		fmt.Print(err)
-		return
-	}
-
-	var cfg config
-	if err := conf.Parse(&cfg, sourcer); err != nil {
-		fmt.Print(err)
-		return
-	}
-
-	out, err := conf.Usage(&cfg)
-	if err != nil {
-		fmt.Print(err)
-		return
-	}
-
-	fmt.Print(out)
-
-	// Output:
-	// Usage: conf.test [options] [arguments]
-
-	// OPTIONS
-	//   --an-int/$an-int <int>         (default: 9)
-	//   --bool/$bool
-	//   --s/-s/$s <string>             (default: B)
-	//   --help/-h
-	// 	  display this help message
+	// an-int=1 a-string=s bool=true
 }
 
 func TestSkipedFieldIsSkipped(t *testing.T) {

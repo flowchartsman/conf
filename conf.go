@@ -65,8 +65,16 @@ func Parse(cfgStruct interface{}, sources ...Sourcer) error {
 				continue
 			}
 
+			// If a short name was provided, that needs to be used.
+			var key []string
+			if field.options.short == 0 {
+				key = field.key
+			} else {
+				key = []string{string(field.options.short)}
+			}
+
 			var value string
-			if value, provided = sourcer.Source(field.key); !provided {
+			if value, provided = sourcer.Source(key); !provided {
 				continue
 			}
 

@@ -72,17 +72,8 @@ func extractFields(prefix []string, target interface{}) ([]field, error) {
 			return nil, fmt.Errorf("conf: error parsing tags for field %s: %s", fieldName, err)
 		}
 
-		// Generate the field key for source lookup.
-		var fieldKey []string
-		if fieldOpts.short == 0 {
-
-			// Break name into constituent pieces via CamelCase parser.
-			fieldKey = append(prefix, camelSplit(fieldName)...)
-		} else {
-
-			// Use the short name that was specified.
-			fieldKey = []string{string(fieldOpts.short)}
-		}
+		// Generate the field key. This could be ignored for short in options.
+		fieldKey := append(prefix, camelSplit(fieldName)...)
 
 		// Drill down through pointers until we bottom out at type or nil.
 		for f.Kind() == reflect.Ptr {
