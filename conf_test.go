@@ -183,7 +183,7 @@ func TestMultiSource(t *testing.T) {
 
 func TestFlagParse(t *testing.T) {
 	type config struct {
-		AnInt   int    `conf:"short:i"`
+		AnInt   int    `conf:"required,short:i"`
 		AString string `conf:"default:B"`
 		Bool    bool   `conf:"default:true"`
 	}
@@ -286,6 +286,23 @@ func TestParseErrors(t *testing.T) {
 				t.Logf("\t%s\tShould NOT be able to accept invalid short tag.", success)
 			}
 			t.Run("tag-bad-short", f)
+		}
+
+		t.Logf("\tTest: %d\tWhen required values are missing.", 2)
+		{
+			f := func(t *testing.T) {
+				var cfg struct {
+					TestInt    int `conf:"required, default:1"`
+					TestString string
+					TestBool   bool
+				}
+				err := conf.Parse(&cfg)
+				if err == nil {
+					t.Fatalf("\t%s\tShould fail for missing required value.", failed)
+				}
+				t.Logf("\t%s\tShould fail for missing required value.", success)
+			}
+			t.Run("required-missing-value", f)
 		}
 	}
 }
@@ -397,9 +414,6 @@ func ExampleString() {
 }
 
 func TestSkipedFieldIsSkipped(t *testing.T) {
-}
-
-func TestCannotSetRequiredAndDefaultTags(t *testing.T) {
 }
 
 func TestHierarchicalFieldNames(t *testing.T) {
