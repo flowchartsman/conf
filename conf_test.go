@@ -72,6 +72,7 @@ func TestBasicParse(t *testing.T) {
 		AnInt   int    `conf:"default:9"`
 		AString string `conf:"default:B,short:s"`
 		Bool    bool
+		Skip    []float64 `conf:"-"`
 	}
 
 	tests := []struct {
@@ -80,10 +81,10 @@ func TestBasicParse(t *testing.T) {
 		args interface{}
 		want config
 	}{
-		{"basic-default", DEFAULT, nil, config{9, "B", false}},
-		{"basic-env", ENV, map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"}, config{1, "s", true}},
-		{"basic-flag", FLAG, []string{"--an-int", "1", "-s", "s", "--bool"}, config{1, "s", true}},
-		{"basic-file", FILE, map[string]string{"AN_INT": "1", "S": "s", "BOOL": "TRUE"}, config{1, "s", true}},
+		{"basic-default", DEFAULT, nil, config{9, "B", false, nil}},
+		{"basic-env", ENV, map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"}, config{1, "s", true, nil}},
+		{"basic-flag", FLAG, []string{"--an-int", "1", "-s", "s", "--bool"}, config{1, "s", true, nil}},
+		{"basic-file", FILE, map[string]string{"AN_INT": "1", "S": "s", "BOOL": "TRUE"}, config{1, "s", true, nil}},
 	}
 
 	t.Log("Given the need to parse basic configuration.")
@@ -286,6 +287,97 @@ func TestParseErrors(t *testing.T) {
 			t.Run("tag-bad-short", f)
 		}
 	}
+}
+
+func ExampleString() {
+	type config struct {
+		AnInt   int    `conf:"default:9"`
+		AString string `conf:"default:B,short:s"`
+		Bool    bool
+		Skip    []float64 `conf:"-"`
+	}
+
+	test := struct {
+		name string
+		src  int
+		args interface{}
+	}{
+		name: "basic-env",
+		src:  ENV,
+		args: map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"},
+	}
+
+	sourcer, err := NewSource(test.src, test.args)
+	if err != nil {
+		fmt.Print(err)
+		return
+	}
+
+	var cfg config
+	if err := conf.Parse(&cfg, sourcer); err != nil {
+		fmt.Print(err)
+		return
+	}
+
+	out, err := conf.String(&cfg)
+	if err != nil {
+		fmt.Print(err)
+		return
+	}
+
+	fmt.Print(out)
+
+	// Output:
+	// an-int=1 s=s bool=true
+}
+
+func ExampleUsage() {
+	type config struct {
+		AnInt   int    `conf:"default:9"`
+		AString string `conf:"default:B,short:s"`
+		Bool    bool
+		Skip    []float64 `conf:"-"`
+	}
+
+	test := struct {
+		name string
+		src  int
+		args interface{}
+	}{
+		name: "basic-env",
+		src:  ENV,
+		args: map[string]string{"TEST_ANINT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE"},
+	}
+
+	sourcer, err := NewSource(test.src, test.args)
+	if err != nil {
+		fmt.Print(err)
+		return
+	}
+
+	var cfg config
+	if err := conf.Parse(&cfg, sourcer); err != nil {
+		fmt.Print(err)
+		return
+	}
+
+	out, err := conf.Usage(&cfg)
+	if err != nil {
+		fmt.Print(err)
+		return
+	}
+
+	fmt.Print(out)
+
+	// Output:
+	// Usage: conf.test [options] [arguments]
+
+	// OPTIONS
+	//   --an-int/$an-int <int>         (default: 9)
+	//   --bool/$bool
+	//   --s/-s/$s <string>             (default: B)
+	//   --help/-h
+	// 	  display this help message
 }
 
 func TestSkipedFieldIsSkipped(t *testing.T) {

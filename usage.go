@@ -3,13 +3,15 @@ package conf
 import (
 	"fmt"
 	"os"
+	"path"
 	"reflect"
 	"sort"
 	"strings"
 	"text/tabwriter"
 )
 
-func printUsage(fields []field) {
+func fmtUsage(fields []field) string {
+	var sb strings.Builder
 
 	// Sort the fields by their long name.
 	sort.SliceStable(fields, func(i, j int) bool {
@@ -24,11 +26,12 @@ func printUsage(fields []field) {
 			help:  "display this help message",
 		}})
 
-	fmt.Fprintf(os.Stderr, "Usage: %s [options] [arguments]\n\n", os.Args[0])
+	_, file := path.Split(os.Args[0])
+	fmt.Fprintf(&sb, "Usage: %s [options] [arguments]\n\n", file)
 
-	fmt.Fprintln(os.Stderr, "OPTIONS")
+	fmt.Fprintln(&sb, "OPTIONS")
 	w := new(tabwriter.Writer)
-	w.Init(os.Stderr, 0, 4, 2, ' ', tabwriter.TabIndent)
+	w.Init(&sb, 0, 4, 2, ' ', tabwriter.TabIndent)
 
 	for _, f := range fields {
 		typeName, help := getTypeAndHelp(&f)
@@ -46,7 +49,7 @@ func printUsage(fields []field) {
 	}
 
 	w.Flush()
-	fmt.Fprintf(os.Stderr, "\n")
+	return sb.String()
 }
 
 // getTypeAndHelp extracts the type and help message for a single field for

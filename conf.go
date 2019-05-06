@@ -116,3 +116,13 @@ func String(v interface{}) (string, error) {
 
 	return s.String(), nil
 }
+
+// Usage provides output to display the config usage on the command line.
+func Usage(v interface{}) (string, error) {
+	fields, err := extractFields(nil, v)
+	if err != nil {
+		return "", err
+	}
+
+	return fmtUsage(fields), nil
+}
