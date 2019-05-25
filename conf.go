@@ -28,11 +28,21 @@ type Sourcer interface {
 
 	// Source takes the field key and attempts to locate that key in its
 	// configuration data. Returns true if found with the value.
-	Source(key []string) (string, bool)
+	Source(fld field) (string, bool)
 }
 
 // Parse parses configuration into the provided struct.
-func Parse(cfgStruct interface{}, sources ...Sourcer) error {
+func Parse(args []string, namespace string, cfgStruct interface{}, sources ...Sourcer) error {
+
+	// Create the flag source.
+	flag, err := newSourceFlag(args)
+	if err != nil {
+		return err
+	}
+
+	// Append default sources to any provided list.
+	sources = append(sources, newSourceEnv(namespace))
+	sources = append(sources, flag)
 
 	// Get the list of fields from the configuration struct to process.
 	fields, err := extractFields(nil, cfgStruct)
@@ -47,12 +57,12 @@ func Parse(cfgStruct interface{}, sources ...Sourcer) error {
 	for _, field := range fields {
 
 		// Set any default value into the struct for this field.
-		if field.options.defaultStr != "" {
-			if err := processField(field.options.defaultStr, field.field); err != nil {
+		if field.options.defaultVal != "" {
+			if err := processField(field.options.defaultVal, field.field); err != nil {
 				return &FieldError{
 					fieldName: field.name,
 					typeName:  field.field.Type().String(),
-					value:     field.options.defaultStr,
+					value:     field.options.defaultVal,
 					err:       err,
 				}
 			}
@@ -65,16 +75,8 @@ func Parse(cfgStruct interface{}, sources ...Sourcer) error {
 				continue
 			}
 
-			// If a short name was provided, that needs to be used.
-			var key []string
-			if field.options.short == 0 {
-				key = field.key
-			} else {
-				key = []string{string(field.options.short)}
-			}
-
 			var value string
-			if value, provided = sourcer.Source(key); !provided {
+			if value, provided = sourcer.Source(field); !provided {
 				continue
 			}
 
@@ -94,12 +96,19 @@ func Parse(cfgStruct interface{}, sources ...Sourcer) error {
 		if !provided && field.options.required {
 			return fmt.Errorf("required field %s is missing value", field.name)
 		}
-
-		// TODO : If this config field will be set to it's zero value, return an error.
-		// ANDY I NEED TO UNDERSTAND WHY YOU HAD THIS. SOME PEOPLE LIKE TO BE EXPLICIT.
 	}
 
 	return nil
+}
+
+// Usage provides output to display the config usage on the command line.
+func Usage(v interface{}) (string, error) {
+	fields, err := extractFields(nil, v)
+	if err != nil {
+		return "", err
+	}
+
+	return fmtUsage(fields), nil
 }
 
 // String returns a stringified version of the provided conf-tagged
@@ -111,26 +120,16 @@ func String(v interface{}) (string, error) {
 	}
 
 	var s strings.Builder
-	for i, field := range fields {
-		if !field.options.noprint {
-			s.WriteString(field.envName)
+	for i, fld := range fields {
+		if !fld.options.noprint {
+			s.WriteString(flagUsage(fld))
 			s.WriteString("=")
-			s.WriteString(fmt.Sprintf("%v", field.field.Interface()))
+			s.WriteString(fmt.Sprintf("%v", fld.field.Interface()))
 			if i < len(fields)-1 {
-				s.WriteString(" ")
+				s.WriteString("\n")
 			}
 		}
 	}
 
 	return s.String(), nil
-}
-
-// Usage provides output to display the config usage on the command line.
-func Usage(v interface{}) (string, error) {
-	fields, err := extractFields(nil, v)
-	if err != nil {
-		return "", err
-	}
-
-	return fmtUsage(fields), nil
 }

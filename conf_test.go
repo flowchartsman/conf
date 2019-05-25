@@ -1,16 +1,13 @@
 package conf_test
 
 import (
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/flowchartsman/conf"
-	"github.com/flowchartsman/conf/source"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -19,22 +16,13 @@ const (
 	failed  = "\u2717"
 )
 
-const (
-	DEFAULT = iota
-	ENV
-	FLAG
-	FILE
-)
-
-var srcNames = []string{"DEFAULT", "ENV", "FLAG", "FILE"}
-
 type ip struct {
-	Name string `conf:"default:localhost"`
+	Name string `conf:"default:localhost,env:IP_NAME_VAR"`
 	IP   string `conf:"default:127.0.0.0"`
 }
 type Embed struct {
 	Name     string        `conf:"default:bill"`
-	Duration time.Duration `conf:"default:1s"`
+	Duration time.Duration `conf:"default:1s,flag:e-dur,short:d"`
 }
 type config struct {
 	AnInt   int    `conf:"default:9"`
@@ -50,109 +38,49 @@ type config struct {
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name string
-		src  int
-		args interface{}
+		envs map[string]string
+		args []string
 		want config
 	}{
 		{
-			"default", DEFAULT,
+			"default",
+			nil,
 			nil,
 			config{9, "B", false, "", ip{"localhost", "127.0.0.0"}, Embed{"bill", time.Second}},
 		},
 		{
-			"env", ENV,
-			map[string]string{"TEST_AN_INT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE", "TEST_SKIP": "SKIP", "TEST_IP_NAME": "local", "TEST_NAME": "andy", "TEST_DURATION": "1m"},
+			"env",
+			map[string]string{"TEST_AN_INT": "1", "TEST_A_STRING": "s", "TEST_BOOL": "TRUE", "TEST_SKIP": "SKIP", "TEST_IP_NAME_VAR": "local", "TEST_NAME": "andy", "TEST_DURATION": "1m"},
+			nil,
 			config{1, "s", true, "", ip{"local", "127.0.0.0"}, Embed{"andy", time.Minute}},
 		},
 		{
-			"flag", FLAG,
-			[]string{"--an-int", "1", "-s", "s", "--bool", "--skip", "skip", "--ip-name", "local", "--name", "andy", "--duration", "1m"},
+			"flag",
+			nil,
+			[]string{"--an-int", "1", "-s", "s", "--bool", "--skip", "skip", "--ip-name", "local", "--name", "andy", "--e-dur", "1m"},
 			config{1, "s", true, "", ip{"local", "127.0.0.0"}, Embed{"andy", time.Minute}},
 		},
 		{
-			"file", FILE,
-			map[string]string{"AN_INT": "1", "S": "s", "BOOL": "TRUE", "SKIP": "skip", "IP_NAME": "local", "NAME": "andy", "DURATION": "1m"},
-			config{1, "s", true, "", ip{"local", "127.0.0.0"}, Embed{"andy", time.Minute}},
+			"multi",
+			map[string]string{"TEST_A_STRING": "s", "TEST_BOOL": "TRUE", "TEST_IP_NAME_VAR": "local", "TEST_NAME": "andy", "TEST_DURATION": "1m"},
+			[]string{"--an-int", "2", "--bool", "--skip", "skip", "--name", "jack", "-d", "1ms"},
+			config{2, "s", true, "", ip{"local", "127.0.0.0"}, Embed{"jack", time.Millisecond}},
 		},
 	}
 
 	t.Log("Given the need to parse basic configuration.")
 	{
 		for i, tt := range tests {
-			t.Logf("\tTest: %d\tWhen checking %s with arguments %v", i, srcNames[tt.src], tt.args)
+			t.Logf("\tTest: %d\tWhen checking with arguments %v", i, tt.args)
 			{
-				f := func(t *testing.T) {
-					sourcer, err := NewSource(tt.src, tt.args)
-					if err != nil {
-						t.Fatalf("\t%s\tShould be able to create a new %s source : %s.", failed, srcNames[tt.src], err)
-					}
-					t.Logf("\t%s\tShould be able to create a new %s source.", success, srcNames[tt.src])
-
-					var cfg config
-					if err := conf.Parse(&cfg, sourcer); err != nil {
-						t.Fatalf("\t%s\tShould be able to Parse arguments : %s.", failed, err)
-					}
-					t.Logf("\t%s\tShould be able to Parse arguments.", success)
-
-					if diff := cmp.Diff(tt.want, cfg); diff != "" {
-						t.Fatalf("\t%s\tShould have properly initialized struct value\n%s", failed, diff)
-					}
-					t.Logf("\t%s\tShould have properly initialized struct value.", success)
+				os.Clearenv()
+				for k, v := range tt.envs {
+					os.Setenv(k, v)
 				}
 
-				t.Run(tt.name, f)
-			}
-		}
-	}
-}
-
-func TestMultiSource(t *testing.T) {
-	tests := []struct {
-		name    string
-		sources []struct {
-			src  int
-			args interface{}
-		}
-		want config
-	}{
-		{
-			name: "basic-env-flag",
-			sources: []struct {
-				src  int
-				args interface{}
-			}{
-				{
-					ENV,
-					map[string]string{"TEST_S": "s", "TEST_BOOL": "TRUE", "TEST_IP_NAME": "local", "TEST_NAME": "andy", "TEST_DURATION": "1m"},
-				},
-				{
-					FLAG,
-					[]string{"--an-int", "2", "--bool", "--skip", "skip", "--name", "jack", "--duration", "1ms"},
-				},
-			},
-			want: config{2, "s", true, "", ip{"local", "127.0.0.0"}, Embed{"jack", time.Millisecond}},
-		},
-	}
-
-	t.Log("Given the need to parse multi-source configurations.")
-	{
-		for i, tt := range tests {
-			t.Logf("\tTest: %d\tWhen checking %d sources", i, len(tt.sources))
-			{
 				f := func(t *testing.T) {
 					var cfg config
-
-					sources := make([]conf.Sourcer, len(tt.sources))
-					for i, ttt := range tt.sources {
-						sourcer, err := NewSource(ttt.src, ttt.args)
-						if err != nil {
-							t.Fatalf("\t%s\tShould be able to create a new %s source : %s.", failed, srcNames[ttt.src], err)
-						}
-						t.Logf("\t%s\tShould be able to create a new %s source.", success, srcNames[ttt.src])
-						sources[i] = sourcer
-					}
-
-					if err := conf.Parse(&cfg, sources...); err != nil {
+					if err := conf.Parse(tt.args, "TEST", &cfg); err != nil {
 						t.Fatalf("\t%s\tShould be able to Parse arguments : %s.", failed, err)
 					}
 					t.Logf("\t%s\tShould be able to Parse arguments.", success)
@@ -180,7 +108,7 @@ func TestErrors(t *testing.T) {
 					TestString string
 					TestBool   bool
 				}
-				err := conf.Parse(cfg)
+				err := conf.Parse(nil, "TEST", cfg)
 				if err == nil {
 					t.Fatalf("\t%s\tShould NOT be able to accept a value by value.", failed)
 				}
@@ -190,7 +118,7 @@ func TestErrors(t *testing.T) {
 
 			f = func(t *testing.T) {
 				var cfg []string
-				err := conf.Parse(cfg)
+				err := conf.Parse(nil, "TEST", &cfg)
 				if err == nil {
 					t.Fatalf("\t%s\tShould NOT be able to pass anything but a struct value.", failed)
 				}
@@ -207,7 +135,7 @@ func TestErrors(t *testing.T) {
 					TestString string
 					TestBool   bool
 				}
-				err := conf.Parse(&cfg)
+				err := conf.Parse(nil, "TEST", &cfg)
 				if err == nil {
 					t.Fatalf("\t%s\tShould NOT be able to accept tag missing value.", failed)
 				}
@@ -221,7 +149,7 @@ func TestErrors(t *testing.T) {
 					TestString string
 					TestBool   bool
 				}
-				err := conf.Parse(&cfg)
+				err := conf.Parse(nil, "TEST", &cfg)
 				if err == nil {
 					t.Fatalf("\t%s\tShould NOT be able to accept invalid short tag.", failed)
 				}
@@ -238,7 +166,7 @@ func TestErrors(t *testing.T) {
 					TestString string
 					TestBool   bool
 				}
-				err := conf.Parse(&cfg)
+				err := conf.Parse(nil, "TEST", &cfg)
 				if err == nil {
 					t.Fatalf("\t%s\tShould fail for missing required value.", failed)
 				}
@@ -255,7 +183,7 @@ func TestErrors(t *testing.T) {
 					testString string
 					testBool   bool
 				}
-				err := conf.Parse(&cfg)
+				err := conf.Parse(nil, "TEST", &cfg)
 				if err == nil {
 					t.Fatalf("\t%s\tShould fail for struct with no exported fields.", failed)
 				}
@@ -267,28 +195,25 @@ func TestErrors(t *testing.T) {
 }
 
 func TestUsage(t *testing.T) {
-	test := struct {
+	tt := struct {
 		name string
-		src  int
-		args interface{}
+		envs map[string]string
 	}{
 		name: "one-example",
-		src:  ENV,
-		args: map[string]string{"TEST_AN_INT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE", "TEST_SKIP": "SKIP", "TEST_IP_NAME": "local", "TEST_NAME": "andy", "TEST_DURATION": "1m"},
+		envs: map[string]string{"TEST_AN_INT": "1", "TEST_A_STRING": "s", "TEST_BOOL": "TRUE", "TEST_SKIP": "SKIP", "TEST_IP_NAME_VAR": "local", "TEST_NAME": "andy", "TEST_DURATION": "1m"},
 	}
 
 	t.Log("Given the need validate usage output.")
 	{
 		t.Logf("\tTest: %d\tWhen using a basic struct.", 0)
 		{
-			sourcer, err := NewSource(test.src, test.args)
-			if err != nil {
-				fmt.Print(err)
-				return
+			os.Clearenv()
+			for k, v := range tt.envs {
+				os.Setenv(k, v)
 			}
 
 			var cfg config
-			if err := conf.Parse(&cfg, sourcer); err != nil {
+			if err := conf.Parse(nil, "TEST", &cfg); err != nil {
 				fmt.Print(err)
 				return
 			}
@@ -303,22 +228,24 @@ func TestUsage(t *testing.T) {
 			want := `Usage: conf.test [options] [arguments]
 
 OPTIONS
-  --a-string/-s/$a-string <string>  (default: B)          
-  --an-int/$an-int <int>            (default: 9)          
-  --bool/$bool                                            
-  --duration/$duration <duration>   (default: 1s)         
-  --ip-ip/$ip-ip <string>           (default: 127.0.0.0)  
-  --ip-name/$ip-name <string>       (default: localhost)  
-  --name/$name <string>             (default: bill)       
-  --help/-h                                               
-      display this help message`
+  --a-string/-s/$A_STRING         <string>    (default: B)  
+  --an-int/$AN_INT                <int>       (default: 9)  
+  --bool/$BOOL                    <bool>  
+  --e-dur/-d/$DURATION            <duration>  (default: 1s)  
+  --ip-ip/$IP_IP                  <string>    (default: 127.0.0.0)  
+  --ip-name/$IP_NAME_VAR          <string>    (default: localhost)  
+  --name/$NAME                    <string>    (default: bill)  
+  --help/-h
+  display this help message`
 
+			got = strings.ReplaceAll(got, " ", "")
+			want = strings.ReplaceAll(want, " ", "")
 			bGot := []byte(got)
 			bWant := []byte(want)
 			if diff := cmp.Diff(bGot, bWant); diff != "" {
 				t.Log("got:\n", got)
 				t.Log("\n", bGot)
-				t.Log("wait:\n", want)
+				t.Log("want:\n", want)
 				t.Log("\n", bWant)
 				t.Fatalf("\t%s\tShould match byte for byte the output.", failed)
 			}
@@ -328,24 +255,21 @@ OPTIONS
 }
 
 func ExampleString() {
-	test := struct {
+	tt := struct {
 		name string
-		src  int
-		args interface{}
+		envs map[string]string
 	}{
 		name: "one-example",
-		src:  ENV,
-		args: map[string]string{"TEST_AN_INT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE", "TEST_SKIP": "SKIP", "TEST_IP_NAME": "local", "TEST_NAME": "andy", "TEST_DURATION": "1m"},
+		envs: map[string]string{"TEST_AN_INT": "1", "TEST_S": "s", "TEST_BOOL": "TRUE", "TEST_SKIP": "SKIP", "TEST_IP_NAME": "local", "TEST_NAME": "andy", "TEST_DURATION": "1m"},
 	}
 
-	sourcer, err := NewSource(test.src, test.args)
-	if err != nil {
-		fmt.Print(err)
-		return
+	os.Clearenv()
+	for k, v := range tt.envs {
+		os.Setenv(k, v)
 	}
 
 	var cfg config
-	if err := conf.Parse(&cfg, sourcer); err != nil {
+	if err := conf.Parse(nil, "TEST", &cfg); err != nil {
 		fmt.Print(err)
 		return
 	}
@@ -359,48 +283,11 @@ func ExampleString() {
 	fmt.Print(out)
 
 	// Output:
-	// an-int=1 a-string=s bool=true ip-name=local ip-ip=127.0.0.0 name=andy duration=1m0s
-}
-
-// =============================================================================
-
-// NewSource returns an initialized source for a given type.
-func NewSource(src int, v interface{}) (conf.Sourcer, error) {
-	switch src {
-	case DEFAULT:
-		return nil, nil
-
-	case ENV:
-		args := v.(map[string]string)
-		os.Clearenv()
-		for k, v := range args {
-			os.Setenv(k, v)
-		}
-		return source.NewEnv("TEST")
-
-	case FLAG:
-		args := v.([]string)
-		return source.NewFlag(args)
-
-	case FILE:
-		args := v.(map[string]string)
-		tf, err := ioutil.TempFile("", "conf-test")
-		if err != nil {
-			return nil, err
-		}
-		defer os.Remove(tf.Name())
-		var vars string
-		for k, v := range args {
-			vars += fmt.Sprintf("%s %s\n", k, v)
-		}
-		if _, err := tf.WriteString(vars); err != nil {
-			return nil, err
-		}
-		if err := tf.Close(); err != nil {
-			return nil, err
-		}
-		return source.NewFile(tf.Name())
-	}
-
-	return nil, errors.New("invalid source provided")
+	// --an-int=1
+	// --a-string/-s=B
+	// --bool=true
+	// --ip-name=localhost
+	// --ip-ip=127.0.0.0
+	// --name=andy
+	// --e-dur/-d=1m0s
 }

@@ -13,17 +13,18 @@ import (
 func fmtUsage(fields []field) string {
 	var sb strings.Builder
 
-	// Sort the fields by their long name.
+	// Sort the fields by their name.
 	sort.SliceStable(fields, func(i, j int) bool {
-		return fields[i].flagName < fields[j].flagName
+		return fields[i].name < fields[j].name
 	})
 
 	fields = append(fields, field{
-		flagName:  "help",
+		name:      "help",
 		boolField: true,
+		flagKey:   []string{"help"},
 		options: fieldOptions{
-			short: 'h',
-			help:  "display this help message",
+			shortFlagChar: 'h',
+			help:          "display this help message",
 		}})
 
 	_, file := path.Split(os.Args[0])
@@ -33,16 +34,15 @@ func fmtUsage(fields []field) string {
 	w := new(tabwriter.Writer)
 	w.Init(&sb, 0, 4, 2, ' ', tabwriter.TabIndent)
 
-	for _, f := range fields {
-		typeName, help := getTypeAndHelp(&f)
-		fmt.Fprintf(w, "  --%s", f.flagName)
-		if f.options.short != 0 {
-			fmt.Fprintf(w, "/-%s", string(f.options.short))
+	for _, fld := range fields {
+		fmt.Fprintf(w, "  %s", flagUsage(fld))
+
+		if fld.name != "help" {
+			fmt.Fprintf(w, "/%s\t", envUsage(fld))
 		}
-		if f.envName != "" {
-			fmt.Fprintf(w, "/$%s", f.envName)
-		}
-		fmt.Fprintf(w, " %s\t%s\t\n", typeName, getOptString(f))
+
+		typeName, help := getTypeAndHelp(&fld)
+		fmt.Fprintf(w, " %s\t%s\t\n", typeName, getOptString(fld))
 		if help != "" {
 			fmt.Fprintf(w, "      %s\t\t\n", help)
 		}
@@ -62,10 +62,10 @@ func fmtUsage(fields []field) string {
 // determined, it will simply give the name "value". Slices will be annotated
 // as "<Type>,[Type...]", where "Type" is whatever type name was chosen.
 // (adapted from package flag).
-func getTypeAndHelp(f *field) (name string, usage string) {
+func getTypeAndHelp(fld *field) (name string, usage string) {
 
 	// Look for a single-quoted name.
-	usage = f.options.help
+	usage = fld.options.help
 	for i := 0; i < len(usage); i++ {
 		if usage[i] == '\'' {
 			for j := i + 1; j < len(usage); j++ {
@@ -79,8 +79,8 @@ func getTypeAndHelp(f *field) (name string, usage string) {
 	}
 
 	var isSlice bool
-	if f.field.IsValid() {
-		t := f.field.Type()
+	if fld.field.IsValid() {
+		t := fld.field.Type()
 
 		// If it's a pointer, we want to deref.
 		if t.Kind() == reflect.Ptr {
@@ -97,14 +97,11 @@ func getTypeAndHelp(f *field) (name string, usage string) {
 		if name == "" {
 			switch t.Kind() {
 			case reflect.Bool:
-				if !isSlice {
-					return "", usage
-				}
-				name = ""
+				name = "bool"
 			case reflect.Float32, reflect.Float64:
 				name = "float"
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				typ := f.field.Type()
+				typ := fld.field.Type()
 				if typ.PkgPath() == "time" && typ.Name() == "Duration" {
 					name = "duration"
 				} else {
@@ -130,16 +127,16 @@ func getTypeAndHelp(f *field) (name string, usage string) {
 	return
 }
 
-func getOptString(f field) string {
+func getOptString(fld field) string {
 	opts := make([]string, 0, 3)
-	if f.options.required {
+	if fld.options.required {
 		opts = append(opts, "required")
 	}
-	if f.options.noprint {
+	if fld.options.noprint {
 		opts = append(opts, "noprint")
 	}
-	if f.options.defaultStr != "" {
-		opts = append(opts, fmt.Sprintf("default: %s", f.options.defaultStr))
+	if fld.options.defaultVal != "" {
+		opts = append(opts, fmt.Sprintf("default: %s", fld.options.defaultVal))
 	}
 	if len(opts) > 0 {
 		return fmt.Sprintf("(%s)", strings.Join(opts, `,`))

@@ -13,25 +13,24 @@ import (
 // field maintains information about a field in the configuration struct.
 type field struct {
 	name    string
-	key     []string
+	flagKey []string
+	envKey  []string
 	field   reflect.Value
 	options fieldOptions
 
 	// Important for flag parsing or any other source where
 	// booleans might be treated specially.
 	boolField bool
-
-	// For usage ...  TODO: I need more.
-	flagName string
-	envName  string
 }
 
 type fieldOptions struct {
-	short      rune
-	help       string
-	defaultStr string
-	noprint    bool
-	required   bool
+	help          string
+	defaultVal    string
+	envName       string
+	flagName      string
+	shortFlagChar rune
+	noprint       bool
+	required      bool
 }
 
 // extractFields uses reflection to examine the struct and generate the keys.
@@ -72,7 +71,7 @@ func extractFields(prefix []string, target interface{}) ([]field, error) {
 			return nil, fmt.Errorf("conf: error parsing tags for field %s: %s", fieldName, err)
 		}
 
-		// Generate the field key. This could be ignored for short in options.
+		// Generate the field key. This could be ignored.
 		fieldKey := append(prefix, camelSplit(fieldName)...)
 
 		// Drill down through pointers until we bottom out at type or nil.
@@ -113,15 +112,25 @@ func extractFields(prefix []string, target interface{}) ([]field, error) {
 				fields = append(fields, innerFields...)
 			}
 		default:
-			fields = append(fields, field{
+			envKey := fieldKey
+			if fieldOpts.envName != "" {
+				envKey = strings.Split(fieldOpts.envName, "_")
+			}
+
+			flagKey := fieldKey
+			if fieldOpts.flagName != "" {
+				flagKey = strings.Split(fieldOpts.flagName, "-")
+			}
+
+			fld := field{
 				name:      fieldName,
-				key:       fieldKey,
-				flagName:  strings.ToLower(strings.Join(fieldKey, `-`)),
-				envName:   strings.ToLower(strings.Join(fieldKey, `-`)),
+				envKey:    envKey,
+				flagKey:   flagKey,
 				field:     f,
 				options:   fieldOpts,
 				boolField: f.Kind() == reflect.Bool,
-			})
+			}
+			fields = append(fields, fld)
 		}
 	}
 
@@ -157,9 +166,13 @@ func parseTag(tagStr string) (fieldOptions, error) {
 				if len([]rune(tagPropVal)) != 1 {
 					return f, fmt.Errorf("short value must be a single rune, got %q", tagPropVal)
 				}
-				f.short = []rune(tagPropVal)[0]
+				f.shortFlagChar = []rune(tagPropVal)[0]
 			case "default":
-				f.defaultStr = tagPropVal
+				f.defaultVal = tagPropVal
+			case "env":
+				f.envName = tagPropVal
+			case "flag":
+				f.flagName = tagPropVal
 			case "help":
 				f.help = tagPropVal
 			}
@@ -170,7 +183,7 @@ func parseTag(tagStr string) (fieldOptions, error) {
 
 	// Perform a sanity check.
 	switch {
-	case f.required && f.defaultStr != "":
+	case f.required && f.defaultVal != "":
 		return f, fmt.Errorf("cannot set both `required` and `default`")
 	}
 

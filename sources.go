@@ -1,23 +1,65 @@
-package source
+package conf
 
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 )
+
+// env is a source for environmental variables.
+type env struct {
+	m map[string]string
+}
+
+// newSourceEnv accepts a namespace and parses the environment into a Env for
+// use by the configuration package.
+func newSourceEnv(namespace string) *env {
+	m := make(map[string]string)
+
+	// Create the uppercase version to meet the standard {NAMESPACE_} format.
+	uspace := fmt.Sprintf("%s_", strings.ToUpper(namespace))
+
+	// Loop and match each variable using the uppercase namespace.
+	for _, val := range os.Environ() {
+		if !strings.HasPrefix(val, uspace) {
+			continue
+		}
+
+		idx := strings.Index(val, "=")
+		m[strings.ToUpper(strings.TrimPrefix(val[0:idx], uspace))] = val[idx+1:]
+	}
+
+	return &env{m: m}
+}
+
+// Source implements the confg.Sourcer interface. It returns the stringfied value
+// stored at the specified key from the environment.
+func (e *env) Source(fld field) (string, bool) {
+	k := strings.ToUpper(strings.Join(fld.envKey, `_`))
+	v, ok := e.m[k]
+	return v, ok
+}
+
+// envUsage constructs a usage string for the environment variable.
+func envUsage(fld field) string {
+	return "$" + strings.ToUpper(strings.Join(fld.envKey, `_`))
+}
+
+// =============================================================================
 
 // ErrHelpWanted provides an indication help was requested.
 var ErrHelpWanted = errors.New("help wanted")
 
-// Flag is a source for command line arguments.
-type Flag struct {
+// flag is a source for command line arguments.
+type flag struct {
 	m map[string]string
 }
 
-// NewFlag parsing a string of command line arguments. NewFlag will return
-// ErrHelpWanted, if the help flag is identifyed. This code is adapted
+// newSourceFlag parsing a string of command line arguments. NewFlag will return
+// errHelpWanted, if the help flag is identifyed. This code is adapted
 // from the Go standard library flag package.
-func NewFlag(args []string) (*Flag, error) {
+func newSourceFlag(args []string) (*flag, error) {
 	m := make(map[string]string)
 
 	if len(args) != 0 {
@@ -86,15 +128,34 @@ func NewFlag(args []string) (*Flag, error) {
 		}
 	}
 
-	return &Flag{m: m}, nil
+	return &flag{m: m}, nil
 }
 
 // Source implements the confg.Sourcer interface. Returns the stringfied value
 // stored at the specified key from the flag source.
-func (f *Flag) Source(key []string) (string, bool) {
-	k := strings.ToLower(strings.Join(key, `-`))
+func (f *flag) Source(fld field) (string, bool) {
+	if fld.options.shortFlagChar != 0 {
+		flagKey := []string{string(fld.options.shortFlagChar)}
+		k := strings.ToLower(strings.Join(flagKey, `-`))
+		if val, found := f.m[k]; found {
+			return val, found
+		}
+	}
+
+	k := strings.ToLower(strings.Join(fld.flagKey, `-`))
 	val, found := f.m[k]
 	return val, found
+}
+
+// flagUsage constructs a usage string for the flag argument.
+func flagUsage(fld field) string {
+	usage := "--" + strings.ToLower(strings.Join(fld.flagKey, `-`))
+	if fld.options.shortFlagChar != 0 {
+		flagKey := []string{string(fld.options.shortFlagChar)}
+		usage += "/-" + strings.ToLower(strings.Join(flagKey, `-`))
+	}
+
+	return usage
 }
 
 /*

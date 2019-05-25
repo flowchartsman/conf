@@ -1,3 +1,4 @@
+/*
 Package conf provides support for using environmental variables and command
 line arguments for configuration.
 
@@ -21,7 +22,7 @@ The field name and any parent struct name will be used for the long form of
 the command name unless the name is overridden.
 
 As an example, this config struct:
-```
+
 	type ip struct {
 		Name string `conf:"default:localhost,env:IP_NAME_VAR"`
 		IP   string `conf:"default:127.0.0.0"`
@@ -38,9 +39,9 @@ As an example, this config struct:
 		IP      ip
 		Embed
 	}
-```
+
 Would produce the following usage output:
-```
+
 Usage: conf.test [options] [arguments]
 
 OPTIONS
@@ -53,13 +54,13 @@ OPTIONS
   --name/$NAME                    <string>    (default: bill)
   --help/-h
   display this help message
-```
 
 The API is a single call to `Parse`
-```
+
 	// Parse(args []string, namespace string, cfgStruct interface{}, sources ...Sourcer) error
 
 	if err := conf.Parse(os.Args, "CRUD", &cfg); err != nil {
 		log.Fatalf("main : Parsing Config : %v", err)
 	}
-```
+*/
+package conf
