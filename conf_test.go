@@ -173,6 +173,17 @@ func TestCannotSetRequiredAndDefaultTags(t *testing.T) {
 	assert(t, err.Error() == "conf: error parsing tags for field TestBad: cannot set both `required` and `default`")
 }
 
+func TestRequiredMustBePresent(t *testing.T) {
+	type required struct {
+		NeededValue string `conf:"required"`
+	}
+	var c required
+	prepArgs()
+	prepEnv()
+	err := Parse(&c)
+	assert(t, err.Error() == "required field NeededValue is missing value")
+}
+
 func TestHierarchicalFieldNames(t *testing.T) {
 	type conf1 struct {
 		FieldOne string
