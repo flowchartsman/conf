@@ -4,12 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 )
 
-var (
-	// ErrInvalidStruct indicates that a configuration struct is not the correct type.
-	ErrInvalidStruct = errors.New("configuration must be a struct pointer")
-)
+// ErrInvalidStruct indicates that a configuration struct is not the correct type.
+var ErrInvalidStruct = errors.New("configuration must be a struct pointer")
 
 type context struct {
 	confFlag string
@@ -89,7 +88,20 @@ func ParseWithArgs(confStruct interface{}, options ...Option) ([]string, error) 
 	// append any additional sources
 	sources = append(sources, c.sources...)
 	// process all fields
+	if err := processFields(sources, fields); err != nil {
+		// if there's an error, we should zero out all fields to avoid the case
+		// where a user might not be checking the error and could end up with a
+		// partially-populated struct.
+		for _, f := range fields {
+			f.field.Set(reflect.Zero(f.field.Type()))
+		}
+		return nil, err
+	}
 
+	return args, nil
+}
+
+func processFields(sources []Source, fields []field) error {
 	for _, field := range fields {
 		var value string
 		var found bool
@@ -101,13 +113,13 @@ func ParseWithArgs(confStruct interface{}, options ...Option) ([]string, error) 
 		}
 		if !found {
 			if field.options.required {
-				return nil, fmt.Errorf("required field %s is missing value", field.name)
+				return fmt.Errorf("required field %s is missing value", field.name)
 			}
 			value = field.options.defaultStr
 		}
 		if value != "" {
 			if err := processField(value, field.field); err != nil {
-				return nil, &processError{
+				return &processError{
 					fieldName: field.name,
 					typeName:  field.field.Type().String(),
 					value:     value,
@@ -116,8 +128,7 @@ func ParseWithArgs(confStruct interface{}, options ...Option) ([]string, error) 
 			}
 		}
 	}
-
-	return args, nil
+	return nil
 }
 
 // A processError occurs when an environment variable cannot be converted to

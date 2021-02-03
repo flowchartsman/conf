@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TODO: Need a better solution for prepArgs/prepEnv(), since forgetting them
+// will break test isolation, and tests also cannot properly run in parallel
+// this way. Too fragile
+
 type simpleConf struct {
 	TestInt    int
 	TestString string
@@ -217,6 +221,20 @@ func TestEmbeddedFieldNames(t *testing.T) {
 	assert(t, err == nil)
 	assert(t, c.FieldOne == "1")
 	assert(t, c.FieldTwo == "2")
+}
+
+func TestNoPartialConfig(t *testing.T) {
+	type required struct {
+		NotNeeded   string
+		NeededValue string `conf:"required"`
+	}
+	var c required
+	prepEnv("NOT_NEEDED", "1")
+	prepArgs()
+	err := Parse(&c)
+	println(err.Error())
+	assert(t, err.Error() == "required field NeededValue is missing value")
+	assert(t, c.NotNeeded == "")
 }
 
 func prepEnv(keyvals ...string) {
